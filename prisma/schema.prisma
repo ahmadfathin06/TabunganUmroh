@@ -1,0 +1,290 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum Role {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum SavingStatus {
+  ACTIVE
+  PAID_OFF
+  CANCELLED
+  DEPARTED
+}
+
+enum DepositStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentMethod {
+  TRANSFER
+  CASH
+}
+
+enum DocumentType {
+  KTP
+  PASSPORT
+  PHOTO
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum PackageStatus {
+  OPEN
+  CLOSED
+  FULL
+}
+
+enum NotificationType {
+  DEPOSIT_APPROVED
+  DEPOSIT_REJECTED
+  REMINDER
+  ANNOUNCEMENT
+  REFERRAL_BONUS
+  DOCUMENT_VERIFIED
+  CHAT_MESSAGE
+  PAID_OFF
+}
+
+// ==========================================
+// MODELS
+// ==========================================
+
+model User {
+  id              String    @id @default(cuid())
+  name            String
+  email           String    @unique
+  password        String
+  phone           String    @unique
+  ktpNumber       String?   @map("ktp_number")
+  address         String?
+  hasPassport     Boolean   @default(false) @map("has_passport")
+  passportNumber  String?   @map("passport_number")
+  avatar          String?
+  role            Role      @default(USER)
+  isActive        Boolean   @default(true) @map("is_active")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  refreshToken    String?   @map("refresh_token")
+
+  // Referral
+  referralCode    String?   @unique @map("referral_code")
+  referredBy      String?   @map("referred_by")
+  referrer        User?     @relation("ReferralRelation", fields: [referredBy], references: [referralCode])
+  referrals       User[]    @relation("ReferralRelation")
+
+  // Relations
+  savingsPlans    SavingsPlan[]
+  notifications   Notification[]
+  documents       Document[]
+  verifiedDeposits Deposit[]  @relation("VerifiedByAdmin")
+  sentMessages    Chat[]      @relation("SentMessages")
+  receivedMessages Chat[]     @relation("ReceivedMessages")
+  referralRewards ReferralReward[]
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model UmrohPackage {
+  id              String        @id @default(cuid())
+  name            String
+  slug            String        @unique
+  description     String?
+  price           Decimal       @db.Decimal(15, 2)
+  departureDate   DateTime      @map("departure_date")
+  departureCity   String        @map("departure_city")
+  durationDays    Int           @map("duration_days")
+  hotelMakkah     String?       @map("hotel_makkah")
+  hotelMadinah    String?       @map("hotel_madinah")
+  airline         String?
+  quota           Int
+  quotaRemaining  Int           @map("quota_remaining")
+  status          PackageStatus @default(OPEN)
+  image           String?
+  includes        String?       // JSON string: ["Visa", "Hotel", "Makan"]
+  excludes        String?       // JSON string: ["Handling", "Tips"]
+
+  // Relations
+  savingsPlans    SavingsPlan[]
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("umroh_packages")
+}
+
+model SavingsPlan {
+  id                String       @id @default(cuid())
+  userId            String       @map("user_id")
+  packageId         String       @map("package_id")
+  jamaahName        String       @map("jamaah_name") // Nama jamaah (bisa beda dari user, misal keluarga)
+  jamaahRelation    String?      @map("jamaah_relation") // "self", "wife", "husband", "child", "parent"
+  targetAmount      Decimal      @db.Decimal(15, 2) @map("target_amount")
+  currentBalance    Decimal      @default(0) @db.Decimal(15, 2) @map("current_balance")
+  status            SavingStatus @default(ACTIVE)
+  monthlyTarget     Decimal?     @db.Decimal(15, 2) @map("monthly_target") // Rekomendasi cicilan/bulan
+  registeredAt      DateTime     @default(now()) @map("registered_at")
+  paidOffAt         DateTime?    @map("paid_off_at")
+  cancelledAt       DateTime?    @map("cancelled_at")
+  cancellationReason String?     @map("cancellation_reason")
+  lunasCertUrl      String?      @map("lunas_cert_url") // URL surat lunas PDF
+
+  // Relations
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  package           UmrohPackage @relation(fields: [packageId], references: [id])
+  deposits          Deposit[]
+
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("savings_plans")
+}
+
+model Deposit {
+  id              String        @id @default(cuid())
+  savingsPlanId   String        @map("savings_plan_id")
+  amount          Decimal       @db.Decimal(15, 2)
+  uniqueCode      Int           @map("unique_code") // 3 digit, misal 237
+  totalTransfer   Decimal       @db.Decimal(15, 2) @map("total_transfer") // amount + uniqueCode
+  proofImage      String?       @map("proof_image")
+  paymentMethod   PaymentMethod @default(TRANSFER) @map("payment_method")
+  status          DepositStatus @default(PENDING)
+  verifiedById    String?       @map("verified_by_id")
+  verifiedAt      DateTime?     @map("verified_at")
+  rejectionReason String?       @map("rejection_reason")
+  notes           String?
+  bankAccountId   String?       @map("bank_account_id")
+
+  // Relations
+  savingsPlan     SavingsPlan   @relation(fields: [savingsPlanId], references: [id], onDelete: Cascade)
+  verifiedBy      User?         @relation("VerifiedByAdmin", fields: [verifiedById], references: [id])
+  bankAccount     BankAccount?  @relation(fields: [bankAccountId], references: [id])
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("deposits")
+}
+
+model BankAccount {
+  id              String    @id @default(cuid())
+  bankName        String    @map("bank_name")
+  accountNumber   String    @map("account_number")
+  accountHolder   String    @map("account_holder")
+  bankLogo        String?   @map("bank_logo")
+  isActive        Boolean   @default(true) @map("is_active")
+
+  // Relations
+  deposits        Deposit[]
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("bank_accounts")
+}
+
+model Document {
+  id              String         @id @default(cuid())
+  userId          String         @map("user_id")
+  type            DocumentType
+  fileUrl         String         @map("file_url")
+  fileName        String         @map("file_name")
+  status          DocumentStatus @default(PENDING)
+  rejectionReason String?        @map("rejection_reason")
+  verifiedAt      DateTime?      @map("verified_at")
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("documents")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false) @map("is_read")
+  metadata  String?          // JSON string untuk data tambahan
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("notifications")
+}
+
+model Chat {
+  id          String  @id @default(cuid())
+  senderId    String  @map("sender_id")
+  receiverId  String  @map("receiver_id")
+  message     String
+  isRead      Boolean @default(false) @map("is_read")
+  attachment  String?
+
+  // Relations
+  sender      User    @relation("SentMessages", fields: [senderId], references: [id])
+  receiver    User    @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("chats")
+}
+
+model ReferralReward {
+  id              String  @id @default(cuid())
+  userId          String  @map("user_id")
+  referredUserId  String  @map("referred_user_id")
+  rewardType      String  @map("reward_type") // "DISCOUNT" atau "BONUS_SALDO"
+  rewardAmount    Decimal @db.Decimal(15, 2) @map("reward_amount")
+  isClaimed       Boolean @default(false) @map("is_claimed")
+
+  // Relations
+  user            User    @relation(fields: [userId], references: [id])
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("referral_rewards")
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}

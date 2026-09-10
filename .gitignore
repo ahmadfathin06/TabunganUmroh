@@ -1,4 +1,21 @@
-node_modules
-dist
+# .gitignore
+cat > .gitignore << 'EOF'
+node_modules/
+client/node_modules/
+server/node_modules/
+client/dist/
+server/.env
+.env
+.vscode/
+.idea/
 .DS_Store
-*.local
+Thumbs.db
+server/src/uploads/*
+!server/src/uploads/.gitkeep
+*.log
+server/prisma/*.db
+server/prisma/*.db-journal
+package.json.backup
+EOF
+
+# .gitignore

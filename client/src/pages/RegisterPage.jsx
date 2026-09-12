@@ -18,6 +18,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import AuthShell, { authInputClass, authLabelClass } from '../components/auth/AuthShell';
 
 const registerSchema = z
   .object({
@@ -91,7 +92,7 @@ export default function RegisterPage() {
 
     const result = await registerUser(payload);
     if (result.success) {
-      toast.success('Registrasi berhasil! Selamat datang 🎉');
+      toast.success('Registrasi berhasil! Selamat datang');
       navigate('/dashboard');
     } else {
       toast.error(result.message || 'Registrasi gagal');
@@ -99,260 +100,220 @@ export default function RegisterPage() {
     }
   };
 
-  const inputClass = (name) =>
-    `w-full pl-11 pr-4 py-2.5 rounded-xl border text-sm outline-none transition focus:ring-2 ${
-      errors[name]
-        ? 'border-rose-300 focus:ring-rose-200'
-        : 'border-slate-200 focus:ring-emerald-200 focus:border-emerald-400'
-    }`;
+  const err = (k) => errors[k] && <p className="mt-1 text-xs text-terra">{errors[k].message}</p>;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-xl">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2">
-            <span className="text-3xl">🕌</span>
-            <span className="font-bold text-2xl text-emerald-800 tracking-tight">
-              Tabunganku <span className="text-amber-600">Umroh</span>
-            </span>
-          </div>
-          <h1 className="mt-3 text-2xl font-bold text-slate-900">Buat Akun Baru</h1>
-          <p className="mt-1 text-slate-500 text-sm">
-            Mulai tabungan umroh Anda sekarang — gratis tanpa biaya admin.
-          </p>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
-            {/* Nama */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="name">
-                Nama Lengkap <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  id="name"
-                  type="text"
-                  placeholder="Nama sesuai KTP"
-                  autoComplete="name"
-                  {...register('name')}
-                  className={inputClass('name')}
-                />
-              </div>
-              {errors.name && <p className="mt-1 text-xs text-rose-600">{errors.name.message}</p>}
-            </div>
-
-            {/* Email + Phone */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="email">
-                  Email <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    id="email"
-                    type="email"
-                    placeholder="nama@email.com"
-                    autoComplete="email"
-                    {...register('email')}
-                    className={inputClass('email')}
-                  />
-                </div>
-                {errors.email && <p className="mt-1 text-xs text-rose-600">{errors.email.message}</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="phone">
-                  No. HP <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    id="phone"
-                    type="tel"
-                    placeholder="08xxxxxxxxxx"
-                    autoComplete="tel"
-                    {...register('phone')}
-                    className={inputClass('phone')}
-                  />
-                </div>
-                {errors.phone && <p className="mt-1 text-xs text-rose-600">{errors.phone.message}</p>}
-              </div>
-            </div>
-
-            {/* Password */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="password">
-                  Password <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    placeholder="Min. 8 karakter + huruf besar & angka"
-                    {...register('password')}
-                    className={`w-full pl-11 pr-11 py-2.5 rounded-xl border text-sm outline-none transition focus:ring-2 ${
-                      errors.password
-                        ? 'border-rose-300 focus:ring-rose-200'
-                        : 'border-slate-200 focus:ring-emerald-200 focus:border-emerald-400'
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((s) => !s)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    aria-label="Tampilkan password"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-                {errors.password && <p className="mt-1 text-xs text-rose-600">{errors.password.message}</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="confirmPassword">
-                  Konfirmasi Password <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    id="confirmPassword"
-                    type={showConfirm ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    placeholder="Ulangi password"
-                    {...register('confirmPassword')}
-                    className={`w-full pl-11 pr-11 py-2.5 rounded-xl border text-sm outline-none transition focus:ring-2 ${
-                      errors.confirmPassword
-                        ? 'border-rose-300 focus:ring-rose-200'
-                        : 'border-slate-200 focus:ring-emerald-200 focus:border-emerald-400'
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirm((s) => !s)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    aria-label="Tampilkan password"
-                  >
-                    {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-                {errors.confirmPassword && (
-                  <p className="mt-1 text-xs text-rose-600">{errors.confirmPassword.message}</p>
-                )}
-              </div>
-            </div>
-
-            {/* KTP + Referral */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="ktpNumber">
-                  No. KTP (opsional)
-                </label>
-                <div className="relative">
-                  <IdCard className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    id="ktpNumber"
-                    type="text"
-                    maxLength={16}
-                    placeholder="16 digit"
-                    {...register('ktpNumber')}
-                    className={inputClass('ktpNumber')}
-                  />
-                </div>
-                {errors.ktpNumber && <p className="mt-1 text-xs text-rose-600">{errors.ktpNumber.message}</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="referralCode">
-                  Kode Referral (opsional)
-                </label>
-                <div className="relative">
-                  <Gift className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    id="referralCode"
-                    type="text"
-                    placeholder="Contoh: ABCD1X2Y"
-                    {...register('referralCode')}
-                    className={inputClass('referralCode')}
-                  />
-                </div>
-                {errors.referralCode && (
-                  <p className="mt-1 text-xs text-rose-600">{errors.referralCode.message}</p>
-                )}
-                <p className="mt-1 text-xs text-slate-400">
-                  Dapatkan bonus Rp50rb untuk pengundang.
-                </p>
-              </div>
-            </div>
-
-            {/* Alamat */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="address">
-                Alamat (opsional)
-              </label>
-              <div className="relative">
-                <MapPin className="absolute left-3.5 top-3 w-5 h-5 text-slate-400" />
-                <textarea
-                  id="address"
-                  rows={2}
-                  placeholder="Alamat lengkap domisili"
-                  {...register('address')}
-                  className={`w-full pl-11 pr-4 py-2.5 rounded-xl border text-sm outline-none transition focus:ring-2 resize-none ${
-                    errors.address
-                      ? 'border-rose-300 focus:ring-rose-200'
-                      : 'border-slate-200 focus:ring-emerald-200 focus:border-emerald-400'
-                  }`}
-                />
-              </div>
-              {errors.address && <p className="mt-1 text-xs text-rose-600">{errors.address.message}</p>}
-            </div>
-
-            {/* Passport */}
-            <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
-              <input
-                type="checkbox"
-                {...register('hasPassport')}
-                className="mt-0.5 w-4 h-4 rounded accent-emerald-700"
-              />
-              <span className="text-sm text-slate-600">
-                Sudah punya paspor <span className="block text-xs text-slate-400">Kosongkan jika belum — bisa diurus nanti.</span>
-              </span>
-            </label>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-sm transition disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Membuat akun...
-                </>
-              ) : (
-                <>
-                  Daftar & Mulai Menabung <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-
-            <p className="text-center text-xs text-slate-400">
-              Dengan mendaftar, Anda menyetujui ketentuan layanan kami.
-            </p>
-          </form>
-        </div>
-
-        <p className="mt-6 text-center text-sm text-slate-500">
+    <AuthShell
+      title="Mulai Perjalanan Suci Anda"
+      subtitle="Buat akun tabungan umroh — gratis, tanpa biaya administrasi, tanpa riba."
+      footer={
+        <>
           Sudah punya akun?{' '}
-          <Link to="/login" className="font-semibold text-emerald-700 hover:text-emerald-800">
+          <Link to="/login" className="font-bold text-forest transition-colors hover:text-gold-600">
             Masuk di sini
           </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        {/* Nama */}
+        <div>
+          <label className={authLabelClass} htmlFor="name">
+            Nama Lengkap <span className="text-terra">*</span>
+          </label>
+          <div className="relative">
+            <User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sage" />
+            <input
+              id="name"
+              type="text"
+              placeholder="Nama sesuai KTP"
+              autoComplete="name"
+              {...register('name')}
+              className={`${authInputClass(errors.name)} pl-11`}
+            />
+          </div>
+          {err('name')}
+        </div>
+
+        {/* Email + Phone */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={authLabelClass} htmlFor="email">
+              Email <span className="text-terra">*</span>
+            </label>
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sage" />
+              <input
+                id="email"
+                type="email"
+                placeholder="nama@email.com"
+                autoComplete="email"
+                {...register('email')}
+                className={`${authInputClass(errors.email)} pl-11`}
+              />
+            </div>
+            {err('email')}
+          </div>
+
+          <div>
+            <label className={authLabelClass} htmlFor="phone">
+              No. HP <span className="text-terra">*</span>
+            </label>
+            <div className="relative">
+              <Phone className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sage" />
+              <input
+                id="phone"
+                type="tel"
+                placeholder="08xxxxxxxxxx"
+                autoComplete="tel"
+                {...register('phone')}
+                className={`${authInputClass(errors.phone)} pl-11`}
+              />
+            </div>
+            {err('phone')}
+          </div>
+        </div>
+
+        {/* Password */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={authLabelClass} htmlFor="password">
+              Password <span className="text-terra">*</span>
+            </label>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sage" />
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                placeholder="Min. 8 karakter"
+                {...register('password')}
+                className={`${authInputClass(errors.password)} pl-11 pr-11`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((s) => !s)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sage transition-colors hover:text-ink"
+                aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {err('password')}
+          </div>
+
+          <div>
+            <label className={authLabelClass} htmlFor="confirmPassword">
+              Konfirmasi <span className="text-terra">*</span>
+            </label>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sage" />
+              <input
+                id="confirmPassword"
+                type={showConfirm ? 'text' : 'password'}
+                autoComplete="new-password"
+                placeholder="Ulangi password"
+                {...register('confirmPassword')}
+                className={`${authInputClass(errors.confirmPassword)} pl-11 pr-11`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm((s) => !s)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sage transition-colors hover:text-ink"
+                aria-label={showConfirm ? 'Sembunyikan password' : 'Tampilkan password'}
+              >
+                {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {err('confirmPassword')}
+          </div>
+        </div>
+
+        {/* KTP + Referral */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={authLabelClass} htmlFor="ktpNumber">No. KTP (opsional)</label>
+            <div className="relative">
+              <IdCard className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sage" />
+              <input
+                id="ktpNumber"
+                type="text"
+                maxLength={16}
+                placeholder="16 digit"
+                {...register('ktpNumber')}
+                className={`${authInputClass(errors.ktpNumber)} pl-11`}
+              />
+            </div>
+            {err('ktpNumber')}
+          </div>
+
+          <div>
+            <label className={authLabelClass} htmlFor="referralCode">Kode Referral (opsional)</label>
+            <div className="relative">
+              <Gift className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sage" />
+              <input
+                id="referralCode"
+                type="text"
+                placeholder="Contoh: ABCD1X2Y"
+                {...register('referralCode')}
+                className={`${authInputClass(errors.referralCode)} pl-11`}
+              />
+            </div>
+            {err('referralCode')}
+            <p className="mt-1 text-xs text-sage/80">Bonus Rp50rb untuk pengundang.</p>
+          </div>
+        </div>
+
+        {/* Alamat */}
+        <div>
+          <label className={authLabelClass} htmlFor="address">Alamat (opsional)</label>
+          <div className="relative">
+            <MapPin className="pointer-events-none absolute left-4 top-3 h-4 w-4 text-sage" />
+            <textarea
+              id="address"
+              rows={2}
+              placeholder="Alamat lengkap domisili"
+              {...register('address')}
+              className={`${authInputClass(errors.address)} resize-none pl-11`}
+            />
+          </div>
+          {err('address')}
+        </div>
+
+        {/* Passport */}
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-emerald-900/10 bg-sand/40 px-4 py-3.5">
+          <input
+            type="checkbox"
+            {...register('hasPassport')}
+            className="mt-0.5 h-4 w-4 rounded accent-gold-600"
+          />
+          <span className="text-sm text-sage">
+            Sudah punya paspor
+            <span className="block text-xs text-sage/70">Kosongkan jika belum — bisa diurus nanti.</span>
+          </span>
+        </label>
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="group flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-6 py-3.5 text-sm font-bold text-night shadow-glow-gold transition disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Membuat akun...
+            </>
+          ) : (
+            <>
+              Daftar &amp; Mulai Menabung
+              <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+            </>
+          )}
+        </button>
+
+        <p className="text-center text-xs text-sage/80">
+          Dengan mendaftar, Anda menyetujui ketentuan layanan kami.
         </p>
-      </div>
-    </div>
+      </form>
+    </AuthShell>
   );
 }

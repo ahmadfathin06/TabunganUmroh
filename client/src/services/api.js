@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { resetSocket } from './socketService';
 
 const api = axios.create({
   baseURL: 'http://localhost:5000/api',
@@ -44,6 +45,7 @@ api.interceptors.response.use(
           return api(originalRequest);
         } catch (refreshError) {
           // Jika refresh token juga gagal/expired, paksa logout
+          resetSocket();
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');

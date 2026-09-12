@@ -1,8 +1,9 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 export const generateAccessToken = (userId, role) => {
   return jwt.sign(
-    { userId, role },
+    { userId, role, jti: crypto.randomUUID() },
     process.env.JWT_ACCESS_SECRET,
     { expiresIn: process.env.JWT_ACCESS_EXPIRES }
   );
@@ -10,7 +11,7 @@ export const generateAccessToken = (userId, role) => {
 
 export const generateRefreshToken = (userId) => {
   return jwt.sign(
-    { userId },
+    { userId: String(userId), jti: crypto.randomUUID() },
     process.env.JWT_REFRESH_SECRET,
     { expiresIn: process.env.JWT_REFRESH_EXPIRES }
   );

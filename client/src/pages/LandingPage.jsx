@@ -1,80 +1,125 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  ArrowRight,
-  ShieldCheck,
-  Landmark,
-  CalendarCheck,
-  Wallet,
-  BadgeCheck,
-  Check,
-  Sparkles,
-} from 'lucide-react';
+import { motion, useScroll, useSpring } from 'motion/react';
+import { ArrowRight } from 'lucide-react';
 import api from '../services/api';
-import { formatCurrency, formatCurrencyShort } from '../utils/formatCurrency';
-import { formatDate } from '../utils/formatDate';
-import { PACKAGE_STATUS } from '../utils/constants';
+import HeroSection from '../components/landing/HeroSection';
+import PackageCard from '../components/landing/PackageCard';
+import SimulationCalculator from '../components/landing/SimulationCalculator';
+import TrustSection from '../components/landing/TrustSection';
+import TestimonialCarousel from '../components/landing/TestimonialCarousel';
+import FAQAccordion from '../components/landing/FAQAccordion';
+import CTABanner from '../components/landing/CTABanner';
+import SectionHeading from '../components/landing/SectionHeading';
+import Reveal from '../components/landing/Reveal';
+import { OrnamentDivider } from '../components/landing/Ornament';
 
-const BENEFITS = [
-  {
-    icon: ShieldCheck,
-    title: 'Terdaftar & Terpercaya',
-    desc: 'Bekerja sama dengan travel umroh berizin resmi Kemenag RI.',
-  },
-  {
-    icon: Wallet,
-    title: 'Cicilan Ringan',
-    desc: 'Tabung mulai dari Rp100rb/bulan. Tanpa bunga, tanpa riba.',
-  },
-  {
-    icon: CalendarCheck,
-    title: 'Keberangkatan Pasti',
-    desc: 'Jadwal jelas dan estimasi keberangkatan bisa dipantau real-time.',
-  },
-  {
-    icon: Landmark,
-    title: 'Transfer Bank Aman',
-    desc: 'Setiap setoran dilindungi kode unik & diverifikasi admin.',
-  },
-];
+/* ---------------- Thin gold scroll progress bar ---------------- */
+function ScrollProgress() {
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, { stiffness: 140, damping: 26, mass: 0.4 });
+  return (
+    <motion.div
+      style={{ scaleX }}
+      className="fixed inset-x-0 top-0 z-[80] h-[3px] origin-left bg-gradient-to-r from-gold-600 via-gold-400 to-gold-300"
+      aria-hidden="true"
+    />
+  );
+}
 
+/* ---------------- 4-step journey ---------------- */
 const STEPS = [
   { step: '01', title: 'Daftar Akun', desc: 'Isi data diri singkat, selesai dalam 2 menit.' },
-  { step: '02', title: 'Pilih Paket', desc: 'Pilih paket umroh sesuai budget & kebutuhan.' },
-  { step: '03', title: 'Tabung Rutin', desc: 'Setor melalui transfer bank dengan kode unik.' },
+  { step: '02', title: 'Pilih Paket', desc: 'Pilih paket umroh sesuai budget & kebutuhan Anda.' },
+  { step: '03', title: 'Tabung Rutin', desc: 'Setor via transfer bank dengan kode unik pribadi.' },
   { step: '04', title: 'Berangkat', desc: 'Saldo lunas, visa & tiket kami urus sampai berangkat.' },
 ];
 
-const FAQS = [
-  {
-    q: 'Berapa minimal setoran tabungan umroh?',
-    a: 'Minimal setoran Rp 100.000 per transaksi. Anda bebas menentukan nominal dan frekuensi, misal mingguan atau bulanan.',
-  },
-  {
-    q: 'Apakah ada biaya administrasi / bunga?',
-    a: 'Tidak ada. Dana jamaah dikelola secara transparan tanpa bunga (bebas riba), hanya harga paket yang diumumkan.',
-  },
-  {
-    q: 'Bagaimana cara membayar setoran?',
-    a: 'Anda akan mendapat rekening bank tujuan + kode unik 3 digit. Transfer sejumlah nominal + kode unik, lalu unggah bukti transfer.',
-  },
-  {
-    q: 'Apakah tabungan bisa dicairkan sebelum lunas?',
-    a: 'Bisa dengan prosedur pembatalan. Sebagian biaya pemrosesan mungkin dikenakan sesuai ketentuan.',
-  },
-  {
-    q: 'Bagaimana jika kuota paket sudah penuh?',
-    a: 'Paket akan ditandai "Penuh". Anda bisa memilih paket lain atau masuk daftar tunggu.',
-  },
-];
+function StepsSection() {
+  return (
+    <section id="tentang" className="relative py-24 md:py-36">
+      <div className="mx-auto max-w-6xl px-6">
+        <Reveal>
+          <SectionHeading
+            label="Cara Kerja"
+            title="Empat Langkah Menuju Tanah Suci"
+            subtitle="Proses yang sederhana namun tertata — dari niat hingga keberangkatan."
+          />
+        </Reveal>
 
+        <div className="relative mt-16 grid gap-8 md:grid-cols-4 md:gap-6">
+          {/* connecting line (desktop) */}
+          <span className="absolute left-0 right-0 top-7 hidden h-px bg-gradient-to-r from-transparent via-gold-500/40 to-transparent md:block" />
+          {STEPS.map((s, i) => (
+            <Reveal key={s.step} delay={i * 0.12}>
+              <div className="group relative text-center md:text-left">
+                <span className="relative z-10 inline-flex h-14 w-14 items-center justify-center rounded-full border border-gold-500/40 bg-cream font-grotesk text-sm font-bold text-gold-600 shadow-card transition-all duration-500 group-hover:bg-gold-500 group-hover:text-night">
+                  {s.step}
+                </span>
+                <h3 className="mt-5 font-serif text-xl text-ink">{s.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-sage">{s.desc}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- Packages section ---------------- */
+function PackagesSection({ packages, loading }) {
+  // featured = API `isFeatured` flag; fallback to the middle card when 3+ packages
+  const flagged = packages.findIndex((p) => p.isFeatured);
+  const featuredIdx = flagged >= 0 ? flagged : packages.length >= 3 ? 1 : -1;
+
+  return (
+    <section id="paket" className="relative bg-white py-24 md:py-36">
+      <div className="mx-auto max-w-6xl px-6">
+        <Reveal>
+          <SectionHeading
+            label="Pilihan Paket"
+            title="Paket yang Sesuai untuk Anda"
+            subtitle="Setiap paket dirancang dengan akomodasi terbaik, jadwal jelas, dan skema tabungan yang ringan."
+          />
+          <OrnamentDivider className="mt-8" />
+        </Reveal>
+
+        {loading ? (
+          <div className="mt-16 grid gap-8 md:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-[480px] animate-pulse rounded-3xl border border-emerald-900/5 bg-cream" />
+            ))}
+          </div>
+        ) : packages.length === 0 ? (
+          <div className="mt-16 rounded-3xl border-2 border-dashed border-emerald-900/10 bg-cream p-16 text-center">
+            <p className="font-serif text-2xl text-ink">Belum ada paket tersedia</p>
+            <p className="mt-2 text-sm text-sage">Silakan cek lagi nanti — kami sedang menyiapkan keberangkatan berikutnya.</p>
+          </div>
+        ) : (
+          <div className="mt-16 grid items-stretch gap-8 md:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+            {packages.slice(0, 6).map((pkg, i) => (
+              <PackageCard key={pkg.id} pkg={pkg} index={i} featured={i === featuredIdx} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ============================ PAGE ============================ */
 export default function LandingPage() {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Simulasi state
-  const [simHarga, setSimHarga] = useState(35000000);
-  const [simTabungan, setSimTabungan] = useState(1000000);
+  // Smooth-scroll to #hash once the page has rendered (e.g. arriving from /login)
+  useEffect(() => {
+    if (!window.location.hash) return undefined;
+    const id = window.location.hash.slice(1);
+    const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }), 350);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -93,326 +138,64 @@ export default function LandingPage() {
     };
   }, []);
 
-  const totalHarga = simHarga || 0;
-  const perBulan = simTabungan || 0;
-  const estBulan = perBulan > 0 ? Math.max(1, Math.ceil(totalHarga / perBulan)) : 0;
-  const estTahun = Math.floor(estBulan / 12);
-  const estSisaBulan = estBulan % 12;
-
-  const paketList = packages.length > 0 ? packages.slice(0, 6) : [];
-
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* ============ HERO ============ */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900">
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 20% 30%, #fff 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 text-emerald-50 text-sm font-medium mb-6">
-            <Sparkles className="w-4 h-4" />
-            Menabung untuk ibadah suci, kini lebih mudah
-          </div>
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-tight max-w-3xl mx-auto">
-            Wujudkan Niat Umroh dengan{' '}
-            <span className="text-amber-400">Tabungan Terencana</span>
-          </h1>
-          <p className="mt-5 max-w-xl mx-auto text-emerald-100/90 text-lg">
-            Tabung sedikit demi sedikit tanpa terbebani. Cicilan ringan, transparan,
-            dan gratis biaya administrasi.
-          </p>
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link
-              to="/register"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-emerald-950 font-bold shadow-lg shadow-amber-500/30 transition"
-            >
-              Mulai Menabung Sekarang <ArrowRight className="w-5 h-5" />
-            </Link>
-            <a
-              href="#paket"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold border border-white/20 transition"
-            >
-              Lihat Pilihan Paket
-            </a>
-          </div>
+    <div className="min-h-screen bg-cream">
+      <ScrollProgress />
+      <HeroSection />
 
-          {/* Stat strip */}
-          <div className="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
-            <div className="rounded-2xl bg-white/10 backdrop-blur p-4">
-              <p className="text-2xl font-bold text-white">Rp100rb</p>
-              <p className="text-emerald-100/80 text-sm">Mulai menabung</p>
-            </div>
-            <div className="rounded-2xl bg-white/10 backdrop-blur p-4">
-              <p className="text-2xl font-bold text-white">0%</p>
-              <p className="text-emerald-100/80 text-sm">Bunga / biaya admin</p>
-            </div>
-            <div className="rounded-2xl bg-white/10 backdrop-blur p-4">
-              <p className="text-2xl font-bold text-white">24/7</p>
-              <p className="text-emerald-100/80 text-sm">Pantau tabungan online</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ============ KEUNGGULAN ============ */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {BENEFITS.map((b) => (
-            <div key={b.title} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition">
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center mb-4">
-                <b.icon className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-slate-900">{b.title}</h3>
-              <p className="mt-1.5 text-sm text-slate-500 leading-relaxed">{b.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ============ PAKET ============ */}
-      <section id="paket" className="bg-white py-16 border-y border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+      {/* quick CTA strip */}
+      <section className="mx-auto max-w-6xl px-6 py-20 md:py-28">
+        <Reveal>
+          <div className="flex flex-col items-center justify-between gap-8 rounded-[2rem] border border-emerald-900/8 bg-gradient-to-r from-sand/80 via-cream to-sand/60 p-8 text-center shadow-card md:flex-row md:p-10 md:text-left">
             <div>
-              <p className="text-emerald-700 font-semibold text-sm uppercase tracking-wider">Pilihan Paket</p>
-              <h2 className="mt-1 text-3xl font-bold text-slate-900">Paket Umroh Kami</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.3em] text-gold-600">Simpanan Aman & Tanpa Riba</p>
+              <h3 className="mt-3 max-w-md font-serif text-2xl leading-snug text-ink md:text-3xl">
+                Mulai dari Rp 100 ribu, insya Allah sampai ke Baitullah.
+              </h3>
             </div>
-            {loading && <p className="text-sm text-slate-400">Memuat paket...</p>}
-          </div>
-
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="rounded-2xl border border-slate-100 p-6 animate-pulse">
-                  <div className="h-4 w-20 bg-slate-100 rounded mb-4" />
-                  <div className="h-6 w-2/3 bg-slate-100 rounded mb-3" />
-                  <div className="h-4 w-full bg-slate-100 rounded mb-2" />
-                  <div className="h-10 w-full bg-slate-100 rounded mt-6" />
-                </div>
-              ))}
-            </div>
-          ) : paketList.length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center">
-              <p className="text-lg font-semibold text-slate-500">Belum ada paket tersedia</p>
-              <p className="text-sm text-slate-400 mt-1">Silakan cek lagi nanti.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paketList.map((pkg) => {
-                const price = Number(pkg.price || 0);
-                const status = PACKAGE_STATUS[pkg.status] || PACKAGE_STATUS.OPEN;
-                return (
-                  <div key={pkg.id} className="group rounded-2xl border border-slate-100 bg-slate-50/50 overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition">
-                    <div className="relative h-40 bg-gradient-to-br from-emerald-700 to-teal-800 flex items-center justify-center">
-                      <span className="text-5xl">🕋</span>
-                      <span className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold ${status.badge}`}>
-                        {status.label}
-                      </span>
-                    </div>
-                    <div className="p-5">
-                      <h3 className="font-bold text-slate-900 text-lg">{pkg.name}</h3>
-                      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                        <span>✈️ {pkg.airline || 'Maskapai terpercaya'}</span>
-                        <span>📅 {formatDate(pkg.departureDate)}</span>
-                        <span>📍 {pkg.departureCity}</span>
-                      </div>
-                      <div className="mt-3 text-2xl font-extrabold text-emerald-800">{formatCurrency(price)}</div>
-                      <div className="mt-1 text-sm text-slate-500">
-                        {pkg.durationDays} hari · sisa kuota {pkg.quotaRemaining ?? '-'}
-                      </div>
-                      <Link
-                        to={pkg.status === 'OPEN' ? '/register' : '#'}
-                        className={`mt-4 inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition ${
-                          pkg.status === 'OPEN'
-                            ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
-                            : 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                        }`}
-                      >
-                        {pkg.status === 'OPEN' ? 'Daftar & Mulai Menabung' : pkg.status === 'FULL' ? 'Kuota Penuh' : 'Paket Ditutup'} <ArrowRight className="w-4 h-4" />
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ============ CARA KERJA ============ */}
-      <section id="tentang" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-10">
-          <p className="text-emerald-700 font-semibold text-sm uppercase tracking-wider">Cara Kerja</p>
-          <h2 className="mt-1 text-3xl font-bold text-slate-900">4 Langkah Menuju Tanah Suci</h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {STEPS.map((s) => (
-            <div key={s.step} className="relative bg-white rounded-2xl border border-slate-100 p-6">
-              <span className="text-4xl font-extrabold text-emerald-100 absolute top-4 right-5">{s.step}</span>
-              <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center text-sm font-bold mb-3">
-                {s.step}
-              </div>
-              <h3 className="font-bold text-slate-900">{s.title}</h3>
-              <p className="mt-1 text-sm text-slate-500">{s.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ============ SIMULASI ============ */}
-      <section className="bg-gradient-to-br from-emerald-950 to-teal-900 py-16">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-10">
-            <p className="text-amber-400 font-semibold text-sm uppercase tracking-wider">Kalkulator</p>
-            <h2 className="mt-1 text-3xl font-bold text-white">Simulasi Cicilan Tabungan</h2>
-            <p className="mt-2 text-emerald-100/80 max-w-lg mx-auto">
-              Perkirakan berapa lama target umroh Anda tercapai.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white/95 backdrop-blur rounded-3xl p-8">
-            <div className="space-y-6">
-              <div>
-                <label className="flex justify-between text-sm font-semibold text-slate-700 mb-2">
-                  <span>Harga Paket Umroh</span>
-                  <span className="text-emerald-700">{formatCurrency(simHarga)}</span>
-                </label>
-                <input
-                  type="range"
-                  min={10000000}
-                  max={100000000}
-                  step={5000000}
-                  value={simHarga}
-                  onChange={(e) => setSimHarga(Number(e.target.value))}
-                  className="w-full accent-emerald-700"
-                />
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>Rp10jt</span>
-                  <span>Rp100jt</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="flex justify-between text-sm font-semibold text-slate-700 mb-2">
-                  <span>Tabungan per Bulan</span>
-                  <span className="text-emerald-700">{formatCurrency(simTabungan)}</span>
-                </label>
-                <input
-                  type="range"
-                  min={100000}
-                  max={5000000}
-                  step={100000}
-                  value={simTabungan}
-                  onChange={(e) => setSimTabungan(Number(e.target.value))}
-                  className="w-full accent-emerald-700"
-                />
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>Rp100rb</span>
-                  <span>Rp5jt</span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {[250000, 500000, 1000000, 2000000].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => setSimTabungan(amt)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                      simTabungan === amt
-                        ? 'bg-emerald-700 text-white border-emerald-700'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-400'
-                    }`}
-                  >
-                    {formatCurrencyShort(amt)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col justify-center bg-emerald-50/70 rounded-2xl p-6">
-              <p className="text-sm text-slate-500">Estimasi waktu untuk melunasi</p>
-              <p className="mt-1 text-4xl font-extrabold text-emerald-900">
-                {estBulan > 0 ? (
-                  <>
-                    {estTahun > 0 && `${estTahun} tahun `}
-                    {estSisaBulan > 0 && `${estSisaBulan} bulan`}
-                    {estTahun === 0 && estSisaBulan === 0 && '1 bulan'}
-                  </>
-                ) : (
-                  '-'
-                )}
-              </p>
-              <div className="mt-4 h-2 rounded-full bg-white overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full transition-all"
-                  style={{ width: perBulan > 0 ? `${Math.min(100, (perBulan / 5000000) * 100)}%` : '0%' }}
-                />
-              </div>
-              <p className="mt-3 text-sm text-slate-600">
-                Dengan menabung <b>{formatCurrency(perBulan)}</b>/bulan, insya Allah {formatCurrencyShort(totalHarga)} dapat
-                tercapai dalam <b>{estBulan} bulan</b>.
-              </p>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="shrink-0">
               <Link
                 to="/register"
-                className="mt-5 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition"
+                className="group inline-flex items-center gap-2.5 rounded-full bg-midnight px-7 py-4 text-sm font-bold text-white transition-colors hover:bg-forest"
               >
-                Mulai Sekarang <ArrowRight className="w-4 h-4" />
+                Buka Tabungan
+                <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
-            </div>
+            </motion.div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
-      {/* ============ FAQ ============ */}
-      <section id="faq" className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-10">
-          <p className="text-emerald-700 font-semibold text-sm uppercase tracking-wider">FAQ</p>
-          <h2 className="mt-1 text-3xl font-bold text-slate-900">Pertanyaan Umum</h2>
-        </div>
-        <div className="space-y-3">
-          {FAQS.map((f) => (
-            <details key={f.q} className="group bg-white rounded-xl border border-slate-100 open:shadow-sm">
-              <summary className="flex items-center justify-between cursor-pointer px-5 py-4 font-semibold text-slate-800 list-none">
-                {f.q}
-                <span className="text-emerald-600 group-open:rotate-45 transition-transform">
-                  <BadgeCheck className="w-5 h-5" />
-                </span>
-              </summary>
-              <p className="px-5 pb-4 text-sm text-slate-500 leading-relaxed">{f.a}</p>
-            </details>
-          ))}
-        </div>
-      </section>
+      <PackagesSection packages={packages} loading={loading} />
+      <StepsSection />
+      <SimulationCalculator />
+      <TrustSection />
+      <TestimonialCarousel />
+      <FAQAccordion />
+      <CTABanner />
 
-      {/* ============ CTA AKHIR ============ */}
-      <section className="bg-emerald-700 py-14">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold text-white">Siap Memulai Perjalanan Suci?</h2>
-          <p className="mt-2 text-emerald-100 max-w-xl mx-auto">
-            Setiap rupiah yang Anda tabung adalah langkah menuju panggilan-Nya.
-          </p>
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link
-              to="/register"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-emerald-900 font-bold hover:bg-emerald-50 transition"
-            >
-              Daftar Sekarang <ArrowRight className="w-5 h-5" />
-            </Link>
-            <Link to="/login" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold hover:bg-emerald-600 transition">
-              Sudah punya akun? Masuk
-            </Link>
+      {/* Sticky bottom CTA (mobile) */}
+      <motion.div
+        initial={{ y: 90 }}
+        animate={{ y: 0 }}
+        transition={{ delay: 1.6, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+        className="fixed inset-x-0 bottom-0 z-[60] border-t border-white/10 bg-midnight/95 px-4 py-3 backdrop-blur-xl md:hidden"
+      >
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-white">Mulai dari Rp 100rb/bulan</p>
+            <p className="truncate text-[10px] text-white/55">Gratis biaya administrasi</p>
           </div>
+          <Link
+            to="/register"
+            className="shrink-0 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-5 py-2.5 text-xs font-bold text-night"
+          >
+            Mulai Menabung
+          </Link>
         </div>
-      </section>
-
-      {/* Trust badges kecil */}
-      <section className="max-w-7xl mx-auto px-4 py-10">
-        <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-sm text-slate-400">
-          <span className="inline-flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600" /> Travel berizin resmi</span>
-          <span className="inline-flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600" /> Dana transparan</span>
-          <span className="inline-flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600" /> Verifikasi bank</span>
-          <span className="inline-flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600" /> Support 7 hari</span>
-        </div>
-      </section>
+      </motion.div>
+      {/* spacer so mobile CTA doesn't cover footer content */}
+      <div className="h-16 bg-night md:hidden" />
     </div>
   );
 }

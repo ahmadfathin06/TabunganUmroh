@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
 import {
   Users,
@@ -11,7 +12,11 @@ import {
   Loader2,
   XCircle,
   Eye,
+  Megaphone,
+  Send,
 } from 'lucide-react';
+import PackagesPanel from '../components/admin/PackagesPanel';
+import DocumentsVerifyPanel from '../components/admin/DocumentsVerifyPanel';
 import api from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -22,6 +27,9 @@ const TABS = {
   VERIFY: 'VERIFY',
   USERS: 'USERS',
   PLANS: 'PLANS',
+  PACKAGES: 'PACKAGES',
+  BROADCAST: 'BROADCAST',
+  DOCS: 'DOCS',
 };
 
 export default function AdminDashboard() {
@@ -120,14 +128,21 @@ export default function AdminDashboard() {
 
         {/* ===== Statistik ===== */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-          {statCards.map((c) => (
-            <div key={c.label} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+          {statCards.map((c, i) => (
+            <motion.div
+              key={c.label}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+              whileHover={{ y: -4 }}
+              className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm"
+            >
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${c.cls} mb-3`}>
                 <c.icon className="w-5 h-5" />
               </div>
               <p className="text-lg font-bold text-slate-900 truncate">{c.value}</p>
               <p className="text-xs text-slate-400">{c.label}</p>
-            </div>
+            </motion.div>
           ))}
           {!stats && (
             <div className="col-span-full text-center text-sm text-slate-400 py-4">Memuat statistik...</div>
@@ -140,6 +155,9 @@ export default function AdminDashboard() {
             { key: TABS.VERIFY, label: `Verifikasi Setoran (${pending.length})` },
             { key: TABS.PLANS, label: `Semua Tabungan (${plans.length})` },
             { key: TABS.USERS, label: `Jamaah (${users.length})` },
+            { key: TABS.PACKAGES, label: 'Paket Umroh' },
+            { key: TABS.DOCS, label: 'Verifikasi Dokumen' },
+            { key: TABS.BROADCAST, label: 'Pengumuman' },
           ].map((t) => (
             <button
               key={t.key}
@@ -159,12 +177,30 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-center py-24">
             <Loader2 className="w-8 h-8 animate-spin text-emerald-700" />
           </div>
-        ) : tab === TABS.VERIFY ? (
-          <VerifyPanel pending={pending} onVerify={verifyDeposit} />
-        ) : tab === TABS.PLANS ? (
-          <PlansPanel plans={plans} />
         ) : (
-          <UsersPanel users={users} />
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {tab === TABS.VERIFY ? (
+                <VerifyPanel pending={pending} onVerify={verifyDeposit} />
+              ) : tab === TABS.PLANS ? (
+                <PlansPanel plans={plans} />
+              ) : tab === TABS.PACKAGES ? (
+                <PackagesPanel />
+              ) : tab === TABS.DOCS ? (
+                <DocumentsVerifyPanel />
+              ) : tab === TABS.BROADCAST ? (
+                <BroadcastPanel users={users} />
+              ) : (
+                <UsersPanel users={users} />
+              )}
+            </motion.div>
+          </AnimatePresence>
         )}
       </div>
     </div>
@@ -478,6 +514,144 @@ function UsersPanel({ users }) {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+/* ============ PENGUMUMAN (BROADCAST) ============ */
+function BroadcastPanel({ users }) {
+  const [target, setTarget] = useState('ALL');
+  const [userId, setUserId] = useState('');
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!title.trim() || !message.trim()) {
+      toast.error('Judul dan isi pengumuman wajib diisi');
+      return;
+    }
+    if (target === 'USER' && !userId) {
+      toast.error('Pilih jamaah tujuan terlebih dahulu');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await api.post('/admin/notifications/broadcast', {
+        target,
+        ...(target === 'USER' && { userId }),
+        title: title.trim(),
+        message: message.trim(),
+      });
+      toast.success(res.data?.message || 'Pengumuman terkirim 📢');
+      setTitle('');
+      setMessage('');
+      setUserId('');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Gagal mengirim pengumuman');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl">
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 bg-emerald-50/70 border-b border-emerald-100">
+          <p className="inline-flex items-center gap-2 font-bold text-sm text-emerald-800">
+            <Megaphone className="w-4 h-4" /> Kirim Pengumuman
+          </p>
+          <p className="mt-1 text-xs text-emerald-700/80">              Notifikasi masuk ke bel Notifikasi jamaah, diterima real-time, plus Web Push bila diaktifkan.
+          </p>
+        </div>
+
+        <form onSubmit={submit} className="p-5 space-y-4">
+          {/* Target */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tujuan</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTarget('ALL')}
+                className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition ${
+                  target === 'ALL'
+                    ? 'bg-emerald-700 text-white border-emerald-700'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Semua Jamaah
+              </button>
+              <button
+                type="button"
+                onClick={() => setTarget('USER')}
+                className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition ${
+                  target === 'USER'
+                    ? 'bg-emerald-700 text-white border-emerald-700'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Jamaah Tertentu
+              </button>
+            </div>
+          </div>
+r
+          {/* Pilih user (kondisional) */}
+          {target === 'USER' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Jamaah</label>
+              <select
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+              >
+                <option value="">— Pilih jamaah —</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.phone || u.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Judul */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Judul</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={100}
+              placeholder="Contoh: Info Keberangkatan Batch Maret"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+            />
+          </div>
+
+          {/* Isi */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Isi Pengumuman</label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={4}
+              maxLength={500}
+              placeholder="Tulis isi pengumuman di sini..."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 resize-none"
+            />
+            <p className="mt-1 text-right text-[11px] text-slate-400">{message.length}/500</p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 transition disabled:opacity-60"
+          >
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {busy ? 'Mengirim...' : target === 'ALL' ? 'Kirim ke Semua Jamaah' : 'Kirim ke Jamaah Terpilih'}
+          </button>
+        </form>
       </div>
     </div>
   );

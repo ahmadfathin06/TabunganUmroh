@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import api from '../services/api';
+import { resetSocket } from '../services/socketService';
 
 export const useAuthStore = create((set) => ({
   user: JSON.parse(localStorage.getItem('user')) || null,
@@ -55,6 +56,9 @@ export const useAuthStore = create((set) => ({
     } catch (err) {
       console.error(err);
     } finally {
+      // Putuskan koneksi realtime agar socket tidak menggantung
+      // dengan token user lama setelah logout.
+      resetSocket();
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');

@@ -1,4 +1,3 @@
-@'
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient({
@@ -8,4 +7,3 @@ const prisma = new PrismaClient({
 });
 
 export default prisma;
-'@ | Set-Content -Path "server\src\config\database.js" -Encoding UTF8

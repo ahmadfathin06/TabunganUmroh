@@ -22,3 +22,10 @@ export const loginSchema = z.object({
   email: z.string().email('Format email tidak valid'),
   password: z.string().min(1, 'Password wajib diisi'),
 });
+
+export const updateProfileSchema = z.object({
+  name: z.string().min(3, 'Nama minimal 3 karakter').max(100).optional(),
+  phone: z.string().min(10, 'No. HP minimal 10 angka').max(15).regex(/^[0-9]+$/, 'Hanya angka').optional(),
+  hasPassport: z.boolean().optional(),
+  passportNumber: z.string().min(5, 'No. paspor minimal 5 karakter').max(30).optional(),
+}).strict();

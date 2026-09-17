@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Copy, Loader2, LogIn, Save } from 'lucide-react';
+import { Copy, Loader2, LogIn, LogOut, Save } from 'lucide-react';
 import api from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { formatDate } from '../utils/formatDate';
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuthStore();
+  const { user, updateUser, logout } = useAuthStore();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(user);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,11 +63,18 @@ export default function ProfilePage() {
     toast.success('Kode referral disalin');
   };
 
+  // Tab bar dashboard tidak menampilkan menu Navbar di mobile, jadi tombol
+  // keluar disediakan di sini (halaman "Akun").
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
   const initial = (profile?.name || user?.name || '?').charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-8">
         <h1 className="text-2xl font-bold text-slate-900 mb-6">Profil Saya 👤</h1>
 
         {loading ? (
@@ -90,12 +98,21 @@ export default function ProfilePage() {
                   <span className="text-xs text-slate-400">Bergabung {profile?.createdAt ? formatDate(profile.createdAt) : '-'}</span>
                 </div>
               </div>
-              <Link
-                to={profile?.role === 'SUPER_ADMIN' || profile?.role === 'ADMIN' ? '/admin' : '/dashboard'}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition"
-              >
-                <LogIn className="w-4 h-4" /> Kembali
-              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  to={profile?.role === 'SUPER_ADMIN' || profile?.role === 'ADMIN' ? '/admin' : '/dashboard'}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition"
+                >
+                  <LogIn className="w-4 h-4" /> Kembali
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 text-sm font-semibold transition"
+                >
+                  <LogOut className="w-4 h-4" /> Keluar
+                </button>
+              </div>
             </div>
 
             {/* ===== Kartu referral ===== */}

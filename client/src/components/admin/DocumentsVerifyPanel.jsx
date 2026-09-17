@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { Check, FileText, Loader2, X, XCircle } from 'lucide-react';
 import api from '../../services/api';
 import { formatDate, timeAgo } from '../../utils/formatDate';
+import { openProtectedFile } from '../../utils/openProtectedFile';
 
 const DOC_TYPES = { KTP: 'KTP', PASSPORT: 'Paspor', PHOTO: 'Pas Foto', OTHER: 'Lainnya' };
 
@@ -25,7 +26,10 @@ export default function DocumentsVerifyPanel() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/admin/documents', {
+      // Endpoint daftar dokumen ada di /documents (khusus ADMIN/SUPER_ADMIN),
+      // bukan /admin/documents — path lama menghasilkan 404 sehingga tab ini
+      // selalu kosong dan tidak bisa memverifikasi apa pun.
+      const res = await api.get('/documents', {
         params: filter ? { status: filter } : {},
       });
       setDocuments(res.data?.data || []);
@@ -130,14 +134,13 @@ export default function DocumentsVerifyPanel() {
                   </p>
                 )}
 
-                <a
-                  href={d.fileUrl}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => openProtectedFile(`/documents/${d.id}/file`)}
                   className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800"
                 >
                   <FileText className="w-4 h-4" /> Lihat dokumen ({d.fileName})
-                </a>
+                </button>
 
                 {d.status === 'PENDING' && (
                   <div className="mt-4 flex gap-2">

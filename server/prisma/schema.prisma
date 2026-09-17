@@ -1,3 +1,18 @@
+// ============================================================================
+// SATU-SATUNYA SUMBER KEBENARAN SKEMA DATABASE
+//
+// Jalankan perintah Prisma dari folder `server/`, bukan dari root repo:
+//   npm run db:generate --prefix server
+//   npm run db:push     --prefix server
+//   npm run db:seed     --prefix server
+//   npm run db:studio   --prefix server
+//
+// Salinan usang di root (`prisma/schema.prisma` dan `prisma/seed.js`) sudah
+// dihapus: isinya berbeda dari skema yang benar-benar dipakai server (tidak ada
+// model PushSubscription dan kolom category/features/isFeatured pada paket),
+// dan seed-nya masih CommonJS sehingga pasti gagal dijalankan di project ESM.
+// ============================================================================
+
 generator client {
   provider = "prisma-client-js"
 }

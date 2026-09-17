@@ -1,6 +1,8 @@
 import prisma from '../config/database.js';
 import ApiResponse from '../utils/apiResponse.js';
 import { createNotification } from '../services/notification.service.js';
+import { streamStoredFile } from '../utils/fileStorage.js';
+import { safeOriginalName } from '../middlewares/upload.middleware.js';
 
 const TYPE_LABEL = { KTP: 'KTP', PASSPORT: 'Paspor', PHOTO: 'Pas foto', OTHER: 'Dokumen' };
 
@@ -24,11 +26,7 @@ const documentController = {
   /** POST /api/documents — upload dokumen (field: document, body: type) */
   upload: async (req, res) => {
     try {
-      const { type } = req.body || {};
-      const allowedTypes = ['KTP', 'PASSPORT', 'PHOTO', 'OTHER'];
-      if (!allowedTypes.includes(type)) {
-        return ApiResponse.error(res, 'Tipe dokumen tidak valid', 400);
-      }
+      const { type } = req.validatedData;
       if (!req.file) return ApiResponse.error(res, 'File dokumen wajib diupload', 400);
 
       // Satu dokumen aktif per tipe: dokumen lama bertipe sama dihapus (file fisik dibiarkan)
@@ -41,7 +39,8 @@ const documentController = {
           userId: req.user.id,
           type,
           fileUrl: `/uploads/${req.file.filename}`,
-          fileName: req.file.originalname,
+          // Nama asli dari client dinormalisasi (hanya untuk tampilan).
+          fileName: safeOriginalName(req.file.originalname),
         },
       });
 
@@ -49,6 +48,28 @@ const documentController = {
     } catch (error) {
       console.error('Upload document error:', error);
       return ApiResponse.error(res, 'Gagal upload dokumen');
+    }
+  },
+
+  /**
+   * GET /api/documents/:id/file — ambil berkas dokumen (KTP/paspor).
+   *
+   * Dokumen hanya boleh diakses pemiliknya atau admin. Sebelumnya berkas ini
+   * disajikan express.static tanpa autentikasi sama sekali.
+   */
+  getFile: async (req, res) => {
+    try {
+      const document = await prisma.document.findUnique({ where: { id: req.params.id } });
+      if (!document) return ApiResponse.error(res, 'Dokumen tidak ditemukan', 404);
+
+      const isOwner = document.userId === req.user.id;
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN';
+      if (!isOwner && !isAdmin) return ApiResponse.error(res, 'Akses ditolak', 403);
+
+      return streamStoredFile(document.fileUrl, res);
+    } catch (error) {
+      console.error('Get document file error:', error);
+      return ApiResponse.error(res, 'Gagal mengambil berkas dokumen');
     }
   },
 

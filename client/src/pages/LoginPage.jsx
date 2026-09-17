@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'react-hot-toast';
-import { Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, KeyRound } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import AuthShell, { authInputClass, authLabelClass } from '../components/auth/AuthShell';
 
@@ -22,7 +22,6 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm({ resolver: zodResolver(loginSchema) });
 
@@ -34,18 +33,6 @@ export default function LoginPage() {
       navigate(role === 'ADMIN' || role === 'SUPER_ADMIN' ? '/admin' : '/dashboard');
     } else {
       toast.error(result.message || 'Login gagal');
-    }
-  };
-
-  const fillDemo = (role) => {
-    if (role === 'admin') {
-      setValue('email', 'admin@tabunganku.com');
-      setValue('password', 'Admin@123456');
-      toast.success('Kredensial admin diisi');
-    } else {
-      setValue('email', 'jamaah@tabunganku.com');
-      setValue('password', 'Password123');
-      toast.success('Kredensial jamaah diisi');
     }
   };
 
@@ -143,29 +130,6 @@ export default function LoginPage() {
             </>
           )}
         </button>
-
-        {/* Demo hint */}
-        <div className="rounded-2xl border border-emerald-900/8 bg-sand/40 p-4">
-          <p className="flex items-center justify-center gap-1.5 text-center text-xs text-sage">
-            <KeyRound className="h-3.5 w-3.5" /> Akses cepat peran demo:
-          </p>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => fillDemo('admin')}
-              className="rounded-xl border border-emerald-900/10 bg-white px-3 py-2 text-xs font-bold text-ink transition hover:border-gold-400"
-            >
-              Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemo('user')}
-              className="rounded-xl border border-emerald-900/10 bg-white px-3 py-2 text-xs font-bold text-ink transition hover:border-gold-400"
-            >
-              Jamaah
-            </button>
-          </div>
-        </div>
       </form>
     </AuthShell>
   );

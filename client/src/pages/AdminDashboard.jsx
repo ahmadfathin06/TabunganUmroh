@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
+import { openProtectedFile } from '../utils/openProtectedFile';
 import {
   Users,
   Target,
@@ -287,14 +288,13 @@ function VerifyPanel({ pending, onVerify }) {
             </div>
 
             {d.proofImage ? (
-              <a
-                href={`http://localhost:5000${d.proofImage}`}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => openProtectedFile(`/deposits/${d.id}/proof`)}
                 className="mt-4 inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition"
               >
                 <Eye className="w-4 h-4" /> Lihat Bukti Transfer
-              </a>
+              </button>
             ) : (
               <p className="mt-4 text-xs text-amber-600">Belum ada bukti transfer diupload.</p>
             )}

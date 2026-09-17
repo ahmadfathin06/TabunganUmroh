@@ -8,6 +8,7 @@ import {
   generateReferralCode,
 } from '../utils/generateToken.js';
 import { notify } from '../services/notification.service.js';
+import { hashToken, safeCompare } from '../utils/tokenHash.js';
 
 const authController = {
   // ============ REGISTER ============
@@ -74,7 +75,8 @@ const authController = {
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { refreshToken },
+        // Disimpan sebagai hash — kebocoran DB tidak langsung memberi sesi aktif.
+        data: { refreshToken: hashToken(refreshToken) },
       });
 
       // Bonus referral jika mendaftar dengan kode
@@ -126,7 +128,8 @@ const authController = {
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { refreshToken },
+        // Disimpan sebagai hash — kebocoran DB tidak langsung memberi sesi aktif.
+        data: { refreshToken: hashToken(refreshToken) },
       });
 
       return ApiResponse.success(res, {
@@ -149,13 +152,18 @@ const authController = {
   // ============ REFRESH TOKEN ============
   refreshToken: async (req, res) => {
     try {
-      const { refreshToken } = req.body;
-      if (!refreshToken) return ApiResponse.error(res, 'Refresh token diperlukan', 400);
+      const { refreshToken } = req.validatedData;
 
       const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
       const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
 
-      if (!user || user.refreshToken !== refreshToken) {
+      // DB menyimpan hash token, jadi bandingkan hash-nya (waktu-konstan).
+      if (
+        !user ||
+        !user.refreshToken ||
+        !user.isActive ||
+        !safeCompare(user.refreshToken, hashToken(refreshToken))
+      ) {
         return ApiResponse.error(res, 'Refresh token tidak valid', 401);
       }
 
@@ -164,7 +172,7 @@ const authController = {
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { refreshToken: newRefresh },
+        data: { refreshToken: hashToken(newRefresh) },
       });
 
       return ApiResponse.success(res, {

@@ -94,10 +94,7 @@ const notificationController = {
 
   subscribe: async (req, res) => {
     try {
-      const { endpoint, keys } = req.body || {};
-      if (!endpoint || !keys?.p256dh || !keys?.auth) {
-        return ApiResponse.error(res, 'Data subscription tidak valid', 400);
-      }
+      const { endpoint, keys } = req.validatedData;
 
       await prisma.pushSubscription.upsert({
         where: { endpoint },
@@ -124,8 +121,7 @@ const notificationController = {
 
   unsubscribe: async (req, res) => {
     try {
-      const { endpoint } = req.body || {};
-      if (!endpoint) return ApiResponse.error(res, 'Endpoint wajib diisi', 400);
+      const { endpoint } = req.validatedData;
 
       await prisma.pushSubscription.deleteMany({
         where: { endpoint, userId: req.user.id },

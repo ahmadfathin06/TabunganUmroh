@@ -4,7 +4,8 @@ import ApiResponse from '../utils/apiResponse.js';
 const savingsController = {
   create: async (req, res) => {
     try {
-      const { packageId, jamaahName, jamaahRelation, monthlyTarget } = req.body;
+      // Selalu pakai hasil validasi zod, bukan body mentah (mass assignment).
+      const { packageId, jamaahName, jamaahRelation, monthlyTarget } = req.validatedData;
 
       const pkg = await prisma.umrohPackage.findUnique({ where: { id: packageId } });
       if (!pkg) return ApiResponse.error(res, 'Paket tidak ditemukan', 404);
@@ -70,7 +71,7 @@ const savingsController = {
           data: {
             status: 'CANCELLED',
             cancelledAt: new Date(),
-            cancellationReason: req.body.reason || null,
+            cancellationReason: req.validatedData?.reason || null,
           },
         });
 

@@ -29,19 +29,33 @@ export default function Navbar() {
   const { scrollY } = useScroll();
 
   const isLanding = location.pathname === '/';
+  // Dashboard punya hero gelap sendiri, jadi Navbar dibuat transparan di atasnya.
+  const isUserDashboard = location.pathname === '/dashboard';
 
-  // Shrink-on-scroll threshold
+  // Shrink-on-scroll threshold. Di dashboard Navbar tetap transparan (teks putih)
+  // sampai hero benar-benar lewat — dihitung dari tinggi hero aslinya agar tidak
+  // menabrak hero gelap di ukuran layar mana pun.
   useEffect(() => {
-    return scrollY.on('change', (v) => setScrolled(v > 40));
-  }, [scrollY]);
+    let heroHeight = 0;
+    return scrollY.on('change', (v) => {
+      if (!isUserDashboard) {
+        setScrolled(v > 40);
+        return;
+      }
+      if (!heroHeight) {
+        heroHeight = document.getElementById('dashboard-hero')?.offsetHeight || 320;
+      }
+      setScrolled(v > heroHeight - 4);
+    });
+  }, [scrollY, isUserDashboard]);
 
   // Close mobile menu on route change
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
 
-  // Transparent-over-hero (landing, top of page) vs solid anywhere else
-  const overHero = isLanding && !scrolled && !menuOpen;
+  // Transparent-over-hero (landing + dashboard, top of page) vs solid anywhere else
+  const overHero = (isLanding || isUserDashboard) && !scrolled && !menuOpen;
   const solid = !overHero;
 
   const goToHash = (hash) => {

@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { FileCheck2, FileUp, Loader2, Upload } from 'lucide-react';
 import api from '../services/api';
 import { formatDate } from '../utils/formatDate';
+import { openProtectedFile } from '../utils/openProtectedFile';
 
 const DOC_TYPES = [
   { value: 'KTP', label: 'KTP' },
@@ -137,14 +138,13 @@ export default function DocumentsPanel() {
                   <p className="font-semibold text-ink">
                     {DOC_TYPES.find((t) => t.value === d.type)?.label || d.type}
                   </p>
-                  <a
-                    href={d.fileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-forest underline underline-offset-2 truncate block max-w-xs"
+                  <button
+                    type="button"
+                    onClick={() => openProtectedFile(`/documents/${d.id}/file`)}
+                    className="text-xs text-forest underline underline-offset-2 truncate block max-w-xs text-left"
                   >
                     {d.fileName}
-                  </a>
+                  </button>
                   <p className="text-[11px] text-sage mt-0.5">Diupload {formatDate(d.createdAt)}</p>
                   {d.status === 'REJECTED' && d.rejectionReason && (
                     <p className="text-xs text-rose-600 mt-1">Alasan: {d.rejectionReason}</p>

@@ -2,6 +2,7 @@ import { Clock, CheckCircle2, XCircle, Search, Upload, X, ChevronLeft, ChevronRi
 import { formatCurrency, formatCurrencyShort } from '../../utils/formatCurrency';
 import { formatDate, timeAgo } from '../../utils/formatDate';
 import { DEPOSIT_STATUS } from '../../utils/constants';
+import { openProtectedFile } from '../../utils/openProtectedFile';
 
 const STATUS_BADGE = {
   PENDING: 'bg-gold-100 text-gold-700',
@@ -158,14 +159,13 @@ export default function DepositHistoryTable({ items, summary, pagination, loadin
                       </td>
                       <td className="px-6 py-4">
                         {d.proofImage ? (
-                          <a
-                            href={`http://localhost:5000${d.proofImage}`}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => openProtectedFile(`/deposits/${d.id}/proof`)}
                             className="inline-flex items-center gap-1 text-xs font-bold text-forest hover:text-gold-600"
                           >
                             Lihat
-                          </a>
+                          </button>
                         ) : d.status === 'PENDING' ? (
                           <button
                             onClick={() => onUploadProof(d.savingsPlanId)}

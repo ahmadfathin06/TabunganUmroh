@@ -13,7 +13,7 @@ export const registerSchema = z.object({
   address: z.string().min(10).optional(),
   hasPassport: z.boolean().optional().default(false),
   referralCode: z.string().optional(),
-}).refine((data) => data.password === data.confirmPassword, {
+}).strict().refine((data) => data.password === data.confirmPassword, {
   message: 'Konfirmasi password tidak cocok',
   path: ['confirmPassword'],
 });
@@ -21,7 +21,11 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email('Format email tidak valid'),
   password: z.string().min(1, 'Password wajib diisi'),
-});
+}).strict();
+
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token wajib diisi'),
+}).strict();
 
 export const updateProfileSchema = z.object({
   name: z.string().min(3, 'Nama minimal 3 karakter').max(100).optional(),

@@ -1,7 +1,55 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+// Path eksplisit ke server/.env agar hasilnya sama entah dijalankan dari folder
+// server/ maupun dari root repo.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+/** Password yang pernah tertulis di repo — tidak boleh dipakai lagi. */
+const KNOWN_WEAK_PASSWORDS = ['Admin@123456', 'Admin123', 'admin123', 'password'];
+
+/**
+ * Password admin TIDAK di-hardcode lagi.
+ *
+ * Sebelumnya seed memakai literal 'Admin@123456' yang tersimpan di repo,
+ * sehingga siapa pun yang bisa membaca source bisa login sebagai super admin
+ * selama password itu belum diganti.
+ */
+const resolveAdminPassword = () => {
+  const fromEnv = (process.env.ADMIN_PASSWORD || '').trim();
+
+  if (fromEnv.length >= 12) {
+    if (KNOWN_WEAK_PASSWORDS.includes(fromEnv)) {
+      if (isProduction) {
+        throw new Error(
+          'ADMIN_PASSWORD masih memakai password default yang bocor di repo. Ganti dulu sebelum seeding di production.'
+        );
+      }
+      console.warn('⚠️  ADMIN_PASSWORD memakai password default yang bocor di repo — segera ganti.');
+    }
+    return fromEnv;
+  }
+
+  if (isProduction) {
+    throw new Error('ADMIN_PASSWORD wajib diset (minimal 12 karakter) untuk seeding di production.');
+  }
+
+  const generated = crypto.randomBytes(12).toString('base64url');
+  console.warn('⚠️  ADMIN_PASSWORD belum diset (min 12 karakter). Password admin dibuat acak:');
+  console.warn(`    ${generated}`);
+  console.warn('    Catat sekarang — hanya tampil sekali, ganti setelah login pertama.');
+  return generated;
+};
 
 async function upsertBankAccount(data) {
   const existing = await prisma.bankAccount.findFirst({
@@ -16,13 +64,14 @@ async function upsertBankAccount(data) {
 async function main() {
   console.log('🌱 Seeding database...');
 
-  const adminPassword = await bcrypt.hash('Admin@123456', 12);
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@tabunganku.com';
+  const adminPassword = await bcrypt.hash(resolveAdminPassword(), 12);
   await prisma.user.upsert({
-    where: { email: 'admin@tabunganku.com' },
+    where: { email: adminEmail },
     update: {},
     create: {
       name: 'Super Admin',
-      email: 'admin@tabunganku.com',
+      email: adminEmail,
       password: adminPassword,
       phone: '081200000001',
       role: 'SUPER_ADMIN',
@@ -33,7 +82,19 @@ async function main() {
   });
   console.log('✅ Admin created');
 
-  const userPassword = await bcrypt.hash('Password123', 12);
+  // Akun demo jamaah: password default 'Password123' HANYA untuk development.
+  // Di production dibuat acak agar tidak ada kredensial publik di database.
+  const demoPasswordFromEnv = (process.env.DEMO_USER_PASSWORD || '').trim();
+  const demoPassword =
+    demoPasswordFromEnv || (isProduction ? crypto.randomBytes(12).toString('base64url') : 'Password123');
+
+  if (isProduction && !demoPasswordFromEnv) {
+    console.warn('⚠️  Akun demo jamaah dibuat dengan password acak (hanya tampil sekarang):');
+    console.warn(`    ${demoPassword}`);
+    console.warn('    Sebaiknya hapus akun demo ini setelah seeding di production.');
+  }
+
+  const userPassword = await bcrypt.hash(demoPassword, 12);
   const demoUser = await prisma.user.upsert({
     where: { email: 'jamaah@tabunganku.com' },
     update: {},

@@ -84,11 +84,7 @@ const adminController = {
    */
   broadcast: async (req, res) => {
     try {
-      const { target, userId, title, message } = req.body || {};
-
-      if (!title?.trim() || !message?.trim()) {
-        return ApiResponse.error(res, 'Judul dan isi pengumuman wajib diisi', 400);
-      }
+      const { target, userId, title, message } = req.validatedData;
 
       if (target === 'USER') {
         if (!userId) return ApiResponse.error(res, 'User tujuan wajib dipilih', 400);

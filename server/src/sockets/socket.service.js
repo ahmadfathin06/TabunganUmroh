@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import prisma from '../config/database.js';
 
 let io = null;
 
@@ -8,20 +9,36 @@ let io = null;
  * Client harus mengirim JWT via auth: { token: '...' } saat connect.
  */
 export const initSocket = (httpServer) => {
+  const allowedOrigins = (process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || '*',
+      // Tanpa fallback '*' — itu membuka koneksi realtime dari situs mana pun.
+      origin: allowedOrigins.length > 0 ? allowedOrigins : false,
       credentials: true,
     },
   });
 
   // Autentikasi koneksi via JWT access token
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
       if (!token) return next(new Error('Unauthorized'));
+
       const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-      socket.data.userId = decoded.userId;
+
+      // Access token lama milik user yang sudah dinonaktifkan tidak boleh
+      // tetap terhubung dan menerima notifikasi realtime.
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, isActive: true },
+      });
+      if (!user || !user.isActive) return next(new Error('Unauthorized'));
+
+      socket.data.userId = user.id;
       next();
     } catch {
       next(new Error('Unauthorized'));

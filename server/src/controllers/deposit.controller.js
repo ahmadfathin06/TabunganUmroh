@@ -3,6 +3,7 @@ import ApiResponse from '../utils/apiResponse.js';
 import generateUniqueCode from '../utils/generateUniqueCode.js';
 import { getPagination } from '../utils/paginationHelper.js';
 import { notify } from '../services/notification.service.js';
+import { streamStoredFile } from '../utils/fileStorage.js';
 
 const depositController = {
   create: async (req, res) => {
@@ -79,6 +80,33 @@ const depositController = {
     } catch (error) {
       console.error('Upload proof error:', error);
       return ApiResponse.error(res, 'Gagal upload bukti');
+    }
+  },
+
+  /**
+   * GET /api/deposits/:id/proof — ambil bukti transfer.
+   * Hanya pemilik setoran atau admin.
+   */
+  getProof: async (req, res) => {
+    try {
+      const deposit = await prisma.deposit.findUnique({
+        where: { id: req.params.id },
+        include: { savingsPlan: { select: { userId: true } } },
+      });
+      if (!deposit) return ApiResponse.error(res, 'Setoran tidak ditemukan', 404);
+
+      const isOwner = deposit.savingsPlan?.userId === req.user.id;
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN';
+      if (!isOwner && !isAdmin) return ApiResponse.error(res, 'Akses ditolak', 403);
+
+      if (!deposit.proofImage) {
+        return ApiResponse.error(res, 'Bukti transfer belum diupload', 404);
+      }
+
+      return streamStoredFile(deposit.proofImage, res);
+    } catch (error) {
+      console.error('Get deposit proof error:', error);
+      return ApiResponse.error(res, 'Gagal mengambil bukti transfer');
     }
   },
 

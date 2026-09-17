@@ -39,7 +39,9 @@ export default function PackagesPanel() {
   const loadPackages = useCallback(async () => {
     setLoadingPkgs(true);
     try {
-      const res = await api.get('/packages');
+      // limit eksplisit: default server 10, sedangkan panel admin harus
+      // menampilkan SEMUA paket agar paket ke-11 dst. tetap bisa dikelola.
+      const res = await api.get('/packages', { params: { limit: 100 } });
       setPackages(res.data?.data || []);
     } catch (err) {
       toast.error('Gagal memuat daftar paket');

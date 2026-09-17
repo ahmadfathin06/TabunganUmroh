@@ -55,6 +55,10 @@
 }
 
 @layer base {
+  :root {
+    /* Tinggi tab bar bawah (mobile) — dipakai untuk offset elemen fixed lain */
+    --bottom-nav-height: 60px;
+  }
   html {
     scroll-behavior: smooth;
     scroll-padding-top: 96px;

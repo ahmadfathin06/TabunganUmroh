@@ -1,47 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { motion } from 'motion/react';
-import { Wallet, Target, Receipt, Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import api from '../services/api';
 import { useAuthStore } from '../stores/authStore';
-import { formatCurrency } from '../utils/formatCurrency';
 
 import DepositModal from '../components/DepositModal';
 import CreatePlanModal from '../components/CreatePlanModal';
 import UploadProofModal from '../components/UploadProofModal';
-import DashboardHeader from '../components/dashboard/DashboardHeader';
-import PlanCard from '../components/dashboard/PlanCard';
-import DepositHistoryTable from '../components/dashboard/DepositHistoryTable';
 import DocumentsPanel from '../components/DocumentsPanel';
 
-/* Premium stat card */
-function StatCard({ label, value, sub, icon: Icon, featured = false, delay = 0 }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
-      className={`rounded-3xl p-6 ${
-        featured
-          ? 'bg-gradient-to-br from-midnight to-forest text-white shadow-lift'
-          : 'border border-emerald-900/5 bg-gradient-to-b from-white to-cream shadow-card'
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${featured ? 'text-gold-300' : 'text-sage'}`}>
-          {label}
-        </p>
-        <Icon className={`h-4 w-4 ${featured ? 'text-gold-300' : 'text-forest'}`} />
-      </div>
-      <p className={`mt-3 font-grotesk text-2xl font-bold tracking-tight ${featured ? 'text-white' : 'text-ink'}`}>
-        {value}
-      </p>
-      <p className={`mt-1 text-xs ${featured ? 'text-white/55' : 'text-sage'}`}>{sub}</p>
-    </motion.div>
-  );
-}
+import DashboardHeader from '../components/dashboard/DashboardHeader';
+import BalanceCard from '../components/dashboard/BalanceCard';
+import TargetProgressCard from '../components/dashboard/TargetProgressCard';
+import QuickActions from '../components/dashboard/QuickActions';
+import ActivePlanRow from '../components/dashboard/ActivePlanRow';
+import PlanCard from '../components/dashboard/PlanCard';
+import DepositHistoryTable from '../components/dashboard/DepositHistoryTable';
 
 const DEFAULT_DEPOSIT_FILTERS = { q: '', from: '', to: '', page: 1 };
+
+function SectionHeading({ title, children }) {
+  return (
+    <div className="mb-4 flex items-center justify-between gap-3 md:mb-5">
+      <h2 className="font-serif text-xl text-ink md:text-2xl">{title}</h2>
+      {children}
+    </div>
+  );
+}
 
 export default function UserDashboard() {
   const { user } = useAuthStore();
@@ -58,6 +43,9 @@ export default function UserDashboard() {
   const [depositLoading, setDepositLoading] = useState(true);
   const filterDebounce = useRef(null);
 
+  const plansRef = useRef(null);
+  const historyRef = useRef(null);
+
   const [showDeposit, setShowDeposit] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showUpload, setShowUpload] = useState(null);
@@ -68,7 +56,7 @@ export default function UserDashboard() {
     try {
       const [plansRes, pkgRes, bankRes] = await Promise.all([
         api.get('/savings/my'),
-        api.get('/packages?status=OPEN'),
+        api.get('/packages?status=OPEN&limit=100'),
         api.get('/bank-accounts'),
       ]);
       setPlans(plansRes.data?.data || []);
@@ -144,46 +132,58 @@ export default function UserDashboard() {
     return { totalBalance, totalTarget, activeCount, progress };
   }, [plans]);
 
-  const h = new Date().getHours();
-  const greeting = h < 11 ? 'Selamat Pagi' : h < 15 ? 'Selamat Siang' : h < 18 ? 'Selamat Sore' : 'Selamat Malam';
+  // Rencana utama = rencana aktif dengan keberangkatan paling dekat
+  const primaryPlan = useMemo(() => {
+    const active = plans.filter((p) => p.status === 'ACTIVE');
+    const pool = active.length > 0 ? active : plans;
+    return (
+      [...pool].sort(
+        (a, b) =>
+          new Date(a.package?.departureDate || 0) - new Date(b.package?.departureDate || 0)
+      )[0] || null
+    );
+  }, [plans]);
+
+  const pendingCount = useMemo(
+    () => depositItems.filter((d) => d.status === 'PENDING').length,
+    [depositItems]
+  );
+
+  const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   return (
-    <div className="min-h-screen bg-cream pb-20">
-      <div className="mx-auto max-w-6xl px-6 py-8">
-        <DashboardHeader
-          greeting={greeting}
-          name={user?.name?.split(' ')[0]}
-          onCreatePlan={() => setShowCreate(true)}
-          onDeposit={() => setShowDeposit(true)}
-          canDeposit={plans.length > 0}
-          refreshing={plans.length}
-        />
+    <div className="min-h-screen bg-cream pb-24">
+      <DashboardHeader name={user?.name} refreshing={plans.length} />
 
-        {/* ===== Summary ===== */}
-        <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            featured
-            label="Total Saldo"
-            value={formatCurrency(stats.totalBalance)}
-            sub={`${stats.progress}% dari total target`}
-            icon={Wallet}
-            delay={0}
+      <div className="relative z-10 mx-auto max-w-6xl px-5 md:px-8">
+        {/* ===== Ringkasan (overlap ke hero) ===== */}
+        <div className="-mt-16 grid gap-4 md:-mt-20 md:grid-cols-2 lg:gap-6">
+          <BalanceCard
+            total={stats.totalBalance}
+            activeCount={stats.activeCount}
+            progress={stats.progress}
           />
-          <StatCard label="Rencana Aktif" value={stats.activeCount} sub="paket sedang ditabung" icon={Target} delay={0.06} />
-          <StatCard
-            label="Total Target"
-            value={formatCurrency(stats.totalTarget)}
-            sub={`untuk ${plans.length} rencana`}
-            icon={Target}
-            delay={0.12}
+          <TargetProgressCard
+            progress={stats.progress}
+            currentBalance={stats.totalBalance}
+            targetAmount={stats.totalTarget}
+            remaining={Math.max(stats.totalTarget - stats.totalBalance, 0)}
+            plan={primaryPlan}
           />
-          <StatCard
-            label="Status Setoran"
-            value={depositItems.filter((d) => d.status === 'PENDING').length}
-            sub="menunggu verifikasi (halaman ini)"
-            icon={Receipt}
-            delay={0.18}
+        </div>
+
+        {/* ===== Aksi cepat ===== */}
+        <div className="mt-4 md:mt-6">
+          <QuickActions
+            onDeposit={() => (plans.length > 0 ? setShowDeposit(true) : setShowCreate(true))}
+            onPlan={() => scrollTo(plansRef)}
+            onHistory={() => scrollTo(historyRef)}
           />
+        </div>
+
+        {/* ===== Rencana aktif ===== */}
+        <div className="mt-4 md:mt-6">
+          <ActivePlanRow plan={primaryPlan} onClick={() => scrollTo(plansRef)} />
         </div>
 
         {loading ? (
@@ -193,9 +193,8 @@ export default function UserDashboard() {
         ) : (
           <>
             {/* ===== Plans ===== */}
-            <section className="mb-12">
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-serif text-2xl text-ink">Rencana Tabungan</h2>
+            <section ref={plansRef} className="mt-10 scroll-mt-24 md:mt-14">
+              <SectionHeading title="Rencana Tabungan">
                 {plans.length > 0 && (
                   <button
                     onClick={() => setShowCreate(true)}
@@ -204,10 +203,10 @@ export default function UserDashboard() {
                     <Plus className="h-4 w-4" /> Rencana Baru
                   </button>
                 )}
-              </div>
+              </SectionHeading>
 
               {plans.length === 0 ? (
-                <div className="rounded-[2rem] border-2 border-dashed border-emerald-900/12 bg-sand/30 p-14 text-center">
+                <div className="rounded-[2rem] border-2 border-dashed border-emerald-900/12 bg-sand/30 p-10 text-center md:p-14">
                   <p className="font-serif text-2xl text-ink">Belum ada rencana tabungan</p>
                   <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-sage">
                     Pilih paket umroh dan mulai menabung. Setoran minimal Rp100rb tanpa biaya administrasi.
@@ -238,8 +237,14 @@ export default function UserDashboard() {
             </section>
 
             {/* ===== Deposit history (server-driven) ===== */}
-            <section className="mb-12">
-              <h2 className="mb-5 font-serif text-2xl text-ink">Histori Setoran</h2>
+            <section ref={historyRef} className="mt-10 scroll-mt-24 md:mt-14">
+              <SectionHeading title="Histori Setoran">
+                {pendingCount > 0 && (
+                  <span className="rounded-full bg-gold-100 px-3 py-1 text-[11px] font-bold text-gold-700">
+                    {pendingCount} menunggu verifikasi
+                  </span>
+                )}
+              </SectionHeading>
               <DepositHistoryTable
                 items={depositItems}
                 summary={depositSummary}
@@ -252,8 +257,8 @@ export default function UserDashboard() {
             </section>
 
             {/* ===== Documents ===== */}
-            <section>
-              <h2 className="mb-5 font-serif text-2xl text-ink">Dokumen</h2>
+            <section className="mt-10 scroll-mt-24 md:mt-14">
+              <SectionHeading title="Dokumen" />
               <DocumentsPanel />
             </section>
           </>

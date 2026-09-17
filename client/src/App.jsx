@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { motion } from 'motion/react';
 import Navbar from './components/Navbar';
+import BottomNav from './components/BottomNav';
 import PageLoader from './components/PageLoader';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -27,6 +28,15 @@ function PageTransition({ children }) {
       {children}
     </motion.div>
   );
+}
+
+/* Tab bar bawah (mobile) — tampil di semua halaman kecuali auth & admin panel */
+function BottomTabBar() {
+  const { pathname } = useLocation();
+  const hidden =
+    pathname.startsWith('/admin') || pathname === '/login' || pathname === '/register';
+
+  return hidden ? null : <BottomNav />;
 }
 
 export default function App() {
@@ -75,6 +85,7 @@ export default function App() {
           </PageTransition>
         </main>
       </Suspense>
+      <BottomTabBar />
     </BrowserRouter>
   );
 }

@@ -2,8 +2,22 @@ import { create } from 'zustand';
 import api from '../services/api';
 import { resetSocket } from '../services/socketService';
 
+/**
+ * Baca JSON dari localStorage secara aman. Jika data corrupt atau
+ * di-tamper (misal oleh extension), app tidak crash.
+ */
+const safeGetJSON = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+};
+
 export const useAuthStore = create((set) => ({
-  user: JSON.parse(localStorage.getItem('user')) || null,
+  user: safeGetJSON('user'),
   isAuthenticated: !!localStorage.getItem('accessToken'),
   isLoading: false,
 
@@ -67,7 +81,7 @@ export const useAuthStore = create((set) => ({
   },
 
   updateUser: (userData) => {
-    const stored = JSON.parse(localStorage.getItem('user')) || {};
+    const stored = safeGetJSON('user') || {};
     const updated = { ...stored, ...userData };
     localStorage.setItem('user', JSON.stringify(updated));
     set({ user: updated });

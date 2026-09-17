@@ -24,11 +24,27 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = event.notification.data?.url || '/';
+
+  /**
+   * Validasi URL: hanya navigasi ke path lokal (same-origin).
+   * Jika server push mengirim URL absolut lintas origin, diabaikan
+   * dan fallback ke '/' agar tidak membuka domain asing.
+   */
+  const raw = event.notification.data?.url || '/';
+  let target = '/';
+  try {
+    // Path absolut seperti '/dashboard' akan lolos。
+    // URL absolut 'https://evil.com' akan ditolak (origin berbeda)。
+    const parsed = new URL(raw, self.location.origin);
+    if (parsed.origin === self.location.origin) {
+      target = parsed.pathname + parsed.search + parsed.hash;
+    }
+  } catch {
+    target = '/';
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Jika ada tab app yang terbuka, fokuskan dan arahkan
       for (const client of clientList) {
         if ('focus' in client) {
           client.navigate(target).catch(() => {});

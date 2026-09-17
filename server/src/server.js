@@ -1,13 +1,14 @@
-import dotenv from 'dotenv';
-dotenv.config();
+// WAJIB paling awal: memuat .env + validasi konfigurasi keamanan sebelum
+// modul lain (app, database) membaca process.env saat dievaluasi.
+import './config/env.js';
 
+import http from 'http';
 import app from './app.js';
 import prisma from './config/database.js';
 import setupReminderCron from './cron/reminder.cron.js';
 import setupCleanupCron from './cron/cleanup.cron.js';
 import { configureVapid } from './services/push.service.js';
 import { initSocket } from './sockets/socket.service.js';
-import http from 'http';
 
 const PORT = process.env.PORT || 5000;
 

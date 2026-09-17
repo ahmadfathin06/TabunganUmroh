@@ -71,7 +71,8 @@ const packageController = {
   update: async (req, res) => {
     try {
       const { id } = req.params;
-      const data = req.body;
+      // Hasil validasi zod, bukan body mentah (mass assignment).
+      const data = { ...req.validatedData };
 
       const existing = await prisma.umrohPackage.findUnique({ where: { id } });
       if (!existing) return ApiResponse.error(res, 'Paket tidak ditemukan', 404);

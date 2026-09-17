@@ -125,7 +125,10 @@ export default function LandingPage() {
     let active = true;
     (async () => {
       try {
-        const res = await api.get('/packages?status=OPEN');
+        // limit eksplisit: default server 10, padahal penanda `isFeatured`
+        // bisa berada di luar 10 paket pertama sehingga kartu "Paling Populer"
+        // tidak pernah ketemu.
+        const res = await api.get('/packages?status=OPEN&limit=100');
         if (active) setPackages(res.data?.data || []);
       } catch (err) {
         console.error('Gagal memuat paket:', err);
@@ -174,12 +177,13 @@ export default function LandingPage() {
       <FAQAccordion />
       <CTABanner />
 
-      {/* Sticky bottom CTA (mobile) */}
+      {/* Sticky bottom CTA (mobile) — duduk tepat di atas tab bar bawah */}
       <motion.div
         initial={{ y: 90 }}
         animate={{ y: 0 }}
         transition={{ delay: 1.6, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        className="fixed inset-x-0 bottom-0 z-[60] border-t border-white/10 bg-midnight/95 px-4 py-3 backdrop-blur-xl md:hidden"
+        style={{ bottom: 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))' }}
+        className="fixed inset-x-0 z-[60] border-t border-white/10 bg-midnight/95 px-4 py-3 backdrop-blur-xl md:hidden"
       >
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
@@ -194,8 +198,8 @@ export default function LandingPage() {
           </Link>
         </div>
       </motion.div>
-      {/* spacer so mobile CTA doesn't cover footer content */}
-      <div className="h-16 bg-night md:hidden" />
+      {/* spacer so tab bar + mobile CTA don't cover footer content */}
+      <div className="h-[calc(var(--bottom-nav-height)+76px)] bg-night md:hidden" />
     </div>
   );
 }

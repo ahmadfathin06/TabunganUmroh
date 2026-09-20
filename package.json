@@ -21,5 +21,13 @@
   "bugs": {
     "url": "https://github.com/ahmadfathin06/TabunganUmroh/issues"
   },
-  "homepage": "https://github.com/ahmadfathin06/TabunganUmroh#readme"
+  "homepage": "https://github.com/ahmadfathin06/TabunganUmroh#readme",
+  "devDependencies": {
+    "prisma": "^8.0.0-rc.15"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "msgpackr-extract@3.0.4": true,
+    "workerd@1.20260704.1": true
+  }
 }

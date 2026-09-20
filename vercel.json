@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install --prefix server --include=dev --no-audit --no-fund && npm install --prefix client --include=dev --no-audit --no-fund",
+  "buildCommand": "npm run db:generate --prefix server && npm run build --prefix client",
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 30
+    }
+  },
+  "crons": [
+    { "path": "/api/cron/cleanup", "schedule": "0 20 * * *" },
+    { "path": "/api/cron/reminder", "schedule": "0 2 25 * *" }
+  ]
+}

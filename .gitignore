@@ -1,21 +1,37 @@
-# .gitignore
-cat > .gitignore << 'EOF'
+# Dependencies
 node_modules/
-client/node_modules/
 server/node_modules/
+client/node_modules/
+
+# Build output
 client/dist/
-server/.env
+.vercel/
+
+# Prisma 7 generated client (dibangun ulang oleh `prisma generate` saat install/build)
+server/src/generated/
+
+# Environment
 .env
+server/.env
+client/.env
+.env.local
+*.env.backup
+
+# Uploads lokal (di Vercel memakai Cloudinary)
+server/src/uploads/*
+!server/src/uploads/.gitkeep
+
+# IDE & OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-server/src/uploads/*
-!server/src/uploads/.gitkeep
+
+# Logs
 *.log
+
+# Database lokal
 server/prisma/*.db
 server/prisma/*.db-journal
-package.json.backup
-EOF
 
-# .gitignore
+package.json.backup

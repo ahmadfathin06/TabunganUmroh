@@ -52,7 +52,13 @@ export const validateEnv = () => {
   }
 
   if (isProduction && !process.env.FRONTEND_URL) {
-    fail('FRONTEND_URL wajib diisi di production — tanpa ini semua request cross-origin ditolak CORS.');
+    // Deploy single-project (client + API satu domain, mis. Vercel) memakai
+    // request same-origin sehingga CORS tidak diperlukan — cukup peringatan.
+    // Wajib diisi HANYA bila frontend di-host di domain terpisah.
+    warn(
+      'FRONTEND_URL belum diset — request cross-origin akan ditolak CORS. '
+        + 'Aman bila client dan API satu domain (same-origin).'
+    );
   }
 
   return true;

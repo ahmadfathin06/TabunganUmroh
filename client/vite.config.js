@@ -7,6 +7,15 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
+    // Same-origin di dev: /api & /socket.io di-proxy ke backend lokal,
+    // konsisten dengan mode production di Vercel (satu domain).
+    proxy: {
+      '/api': 'http://localhost:5000',
+      '/socket.io': {
+        target: 'http://localhost:5000',
+        ws: true,
+      },
+    },
   },
   build: {
     rollupOptions: {

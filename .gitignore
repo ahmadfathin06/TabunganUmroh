@@ -10,6 +10,9 @@ client/dist/
 # Prisma 7 generated client (dibangun ulang oleh `prisma generate` saat install/build)
 server/src/generated/
 
+# Bundel serverless (dibangun ulang oleh `npm run build:api --prefix server` saat build)
+server/.build/
+
 # Environment
 .env
 server/.env

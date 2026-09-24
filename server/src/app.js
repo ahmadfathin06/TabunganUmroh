@@ -11,6 +11,19 @@ const app = express();
 app.disable('x-powered-by');
 
 /**
+ * Vercel menjalankan app di belakang reverse proxy yang selalu menyisipkan
+ * header `X-Forwarded-For`. Tanpa `trust proxy`, express-rate-limit melempar
+ * `ValidationError: The 'X-Forwarded-For' header is set but the Express
+ * 'trust proxy'...` (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR) — request pun jatuh
+ * ke error handler sebagai 500 sebelum menyentuh controller.
+ *
+ * `1` = percayai tepat satu hop proxy (edge Vercel), sehingga req.ip adalah
+ * IP asli client — rate limit per-IP tetap akurat. Lokal tanpa proxy tetap
+ * aman dengan nilai ini.
+ */
+app.set('trust proxy', 1);
+
+/**
  * Helmet hardening untuk backend API REST.
  *
  * CSP: backend hanya mengirim JSON — bukan HTML yang bisa menjalankan script.

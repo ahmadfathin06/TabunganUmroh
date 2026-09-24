@@ -10,6 +10,7 @@
     "build:api": "esbuild src/app.js --bundle --platform=node --format=esm --packages=external --target=node22 --outfile=.build/server.mjs",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:deploy": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio",

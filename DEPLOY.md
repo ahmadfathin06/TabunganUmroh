@@ -90,10 +90,18 @@ Pilih environment **Production, Preview, Development** semua.
 
 ## 5. Migrasi database saat deploy
 
-Vercel tidak menjalankan `prisma db push` otomatis. `vercel.json` sudah
-menjalankan `prisma generate` saat build; perubahan skema diterapkan manual
-dari lokal (langkah 1) atau tambahkan build plugin pihak ketiga bila ingin
-otomatis.
+`vercel.json` sudah menjalankan **`prisma db push` otomatis** di awal build
+(`npm run db:deploy --prefix server`) — jadi schema selalu sinkron dengan
+`schema.prisma` setiap deploy. Syaratnya `DATABASE_URL` harus tersedia pada
+**Build** (Vercel menyuntik env var project ke build command secara default).
+
+Jika perubahan schema berpotensi kehilangan data, build akan **gagal** dengan
+pesan data-loss — terapkan perubahan tsb secara manual dari lokal:
+
+```bash
+cd server
+DATABASE_URL="<connection-string>" npx prisma db push --accept-data-loss
+```
 
 ## 6. Verifikasi setelah deploy
 

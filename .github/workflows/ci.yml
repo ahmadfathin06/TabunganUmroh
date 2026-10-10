@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # ---------------------------------------------------------------- build/test
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tabunganku
+          POSTGRES_PASSWORD: tabunganku
+          POSTGRES_DB: tabunganku_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tabunganku"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://tabunganku:tabunganku@127.0.0.1:5432/tabunganku_test?schema=public&connection_limit=5
+      # Hanya nilai uji (bukan secret produksi). Secret produksi memakai
+      # GitHub Secrets / Vercel Environment Variables.
+      JWT_ACCESS_SECRET: ci_access_secret_0123456789abcdefghijklmnop
+      JWT_REFRESH_SECRET: ci_refresh_secret_0123456789abcdefghijklmn
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci --prefix server --include=dev --no-audit --no-fund
+          npm ci --prefix client --include=dev --no-audit --no-fund
+
+      - name: Prisma generate + push schema
+        run: |
+          npm run db:generate --prefix server
+          npm run db:push --prefix server
+
+      - name: Lint
+        run: npm run lint --prefix server
+
+      - name: Unit tests
+        run: npm run test:unit --prefix server
+
+      - name: Integration tests
+        run: npm run test:integration --prefix server
+
+      - name: Build API bundle (esbuild)
+        run: npm run build:api --prefix server
+
+      - name: Build client
+        run: npm run build --prefix client
+
+  # ----------------------------------------------------------------- e2e browser
+  e2e:
+    name: E2E (Puppeteer)
+    runs-on: ubuntu-latest
+    needs: build-test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tabunganku
+          POSTGRES_PASSWORD: tabunganku
+          POSTGRES_DB: tabunganku_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tabunganku"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://tabunganku:tabunganku@127.0.0.1:5432/tabunganku_test?schema=public&connection_limit=5
+      JWT_ACCESS_SECRET: ci_access_secret_0123456789abcdefghijklmnop
+      JWT_REFRESH_SECRET: ci_refresh_secret_0123456789abcdefghijklmn
+      FRONTEND_URL: http://localhost:5173
+      # Kredensial admin khusus CI (bukan password produksi).
+      ADMIN_EMAIL: admin-ci@tabunganku.test
+      ADMIN_PASSWORD: CiAdminPass12345
+      E2E_BASE_URL: http://localhost:5173
+      E2E_ADMIN_EMAIL: admin-ci@tabunganku.test
+      E2E_ADMIN_PASSWORD: CiAdminPass12345
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+            client/e2e/package-lock.json
+
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Install dependencies
+        run: |
+          npm ci --prefix server --include=dev --no-audit --no-fund
+          npm ci --prefix client --include=dev --no-audit --no-fund
+          npm ci --prefix client/e2e --no-audit --no-fund
+
+      - name: Prepare database
+        run: |
+          npm run db:generate --prefix server
+          npm run db:push --prefix server
+          npm run db:seed --prefix server
+
+      - name: Start API server
+        run: |
+          nohup npm run start --prefix server > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5000/api/health > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -sf http://localhost:5000/api/health || { echo '--- api.log ---'; cat /tmp/api.log; exit 1; }
+
+      - name: Start client dev server
+        run: |
+          nohup npm run dev --prefix client -- --host 127.0.0.1 --port 5173 > /tmp/client.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5173 > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -sf http://localhost:5173 > /dev/null || { echo '--- client.log ---'; cat /tmp/client.log; exit 1; }
+
+      - name: Run E2E
+        env:
+          PUPPETEER_EXECUTABLE_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: npm test --prefix client/e2e
+
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: |
+            client/e2e/shots/
+            /tmp/api.log
+            /tmp/client.log
+          if-no-files-found: ignore

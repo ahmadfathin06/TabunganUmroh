@@ -1,23 +1,39 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { hasCloudinaryCredentials, missingCloudinaryKeys } from '../utils/credentials.js';
+import { getEmailStatus, getEmailConfigIssues } from './mailer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** Path eksplisit ke server/.env — tidak bergantung pada current working directory. */
-const ENV_PATH = path.join(__dirname, '../../.env');
-
 /**
- * Modul ini WAJIB di-import paling awal di server.js.
+ * Path eksplisit ke server/.env — tidak bergantung pada current working directory.
  *
- * ES module dievaluasi mengikuti urutan import, sedangkan `dotenv.config()`
- * hanya bekerja kalau dipanggil sebelum modul lain membaca `process.env`.
- * Sebelumnya `dotenv.config()` ada di body server.js sehingga berjalan
- * SETELAH app.js dievaluasi (import bersifat hoisted).
+ * PENTING (bundle esbuild): `npm run build:api` membundel seluruh server ke
+ * server/.build/server.mjs. Di dalam bundle, `__dirname` = folder .build, bukan
+ * src/config, sehingga '../../.env' akan menunjuk ke ROOT repo dan file .env
+ * tidak pernah termuat — semua env kosong → seluruh endpoint DB gagal 500
+ * (persis gejala `api/packages` 500 di production). Jadi path dicoba dari dua
+ * kandidat: src/config (mode sumber) dan .build (mode bundle).
  */
-const { error } = dotenv.config({ path: ENV_PATH });
-if (error) {
-  console.warn(`⚠️  File ${ENV_PATH} tidak ditemukan — isi variabel environment lewat cara lain.`);
+const ENV_CANDIDATES = [
+  path.join(__dirname, '../../.env'), // dari src/config/  → server/.env
+  path.join(__dirname, '../.env'), // dari .build/      → server/.env
+];
+
+const loadDotenv = () => {
+  for (const candidate of ENV_CANDIDATES) {
+    const { error } = dotenv.config({ path: candidate });
+    if (!error) return candidate;
+  }
+  return null;
+};
+
+const loadedFrom = loadDotenv();
+if (!loadedFrom) {
+  console.warn(
+    '⚠️  File .env tidak ditemukan di lokasi standar — isi variabel environment lewat cara lain.'
+  );
 }
 
 const REQUIRED = ['DATABASE_URL', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'];
@@ -55,9 +71,33 @@ export const validateEnv = () => {
     // Deploy single-project (client + API satu domain, mis. Vercel) memakai
     // request same-origin sehingga CORS tidak diperlukan — cukup peringatan.
     // Wajib diisi HANYA bila frontend di-host di domain terpisah.
+    //
+    // PENTING: validasi ini TIDAK boleh menolak request tanpa header Origin
+    // (same-origin, curl, health check) — lihat konfigurasi CORS di app.js.
     warn(
       'FRONTEND_URL belum diset — request cross-origin akan ditolak CORS. '
         + 'Aman bila client dan API satu domain (same-origin).'
+    );
+  }
+
+  // Cloudinary: di Vercel filesystem read-only, jadi upload WAJIB Cloudinary.
+  // Nilai placeholder (`your_cloud_name` dll.) tidak dianggap terkonfigurasi.
+  if (!hasCloudinaryCredentials()) {
+    const missing = missingCloudinaryKeys().join(', ');
+    const msg =
+      `Cloudinary belum terkonfigurasi (${missing}) — upload dokumen/bukti `
+      + 'tidak akan berfungsi di Vercel. Isi ketiga variabel CLOUDINARY_* dengan nilai asli.';
+    isProduction ? warn(msg) : warn(`${msg} (mode disk lokal dipakai di development)`);
+  }
+
+  // Email/Resend: opsional. Bila pengguna MENGAKTIFKAN email tetapi
+  // konfigurasinya tidak lengkap, gagalkan start dengan pesan yang aman
+  // (nama variabel saja — tanpa nilai) supaya tidak jadi kegagalan senyap.
+  const emailStatus = getEmailStatus();
+  if (emailStatus === 'misconfigured') {
+    fail(
+      `EMAIL_ENABLED=true tetapi konfigurasi email belum lengkap: ${getEmailConfigIssues().join(', ')}. `
+        + 'Isi variabel tersebut, atau set EMAIL_ENABLED=false untuk mematikan email.'
     );
   }
 

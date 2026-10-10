@@ -3,7 +3,8 @@ import path from 'path';
 import cron from 'node-cron';
 import { fileURLToPath } from 'url';
 import prisma from '../config/database.js';
-import { UPLOADS_DIR } from '../utils/fileStorage.js';
+import { UPLOADS_DIR, storedNameFromPublicId } from '../utils/fileStorage.js';
+import { hasCloudinaryCredentials } from '../utils/credentials.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,13 +30,6 @@ const collectReferencedFiles = async () => {
   return referenced;
 };
 
-const hasCloudinaryCreds = () =>
-  Boolean(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
-  );
-
 /**
  * Hapus asset Cloudinary yatim (mode Cloudinary / Vercel).
  * Asset di-upload dengan type "authenticated" + prefix public_id "tuu-",
@@ -44,6 +38,19 @@ const hasCloudinaryCreds = () =>
 const cleanupCloudinaryOrphans = async (referenced) => {
   let deleted = 0;
   let errors = 0;
+
+  // Referensi DB disimpan sebagai nama berkas BER-ekstensi
+  // (`proof-<uuid>.png`), sedangkan public_id Cloudinary tidak memuat ekstensi.
+  // Normalisasi keduanya ke bentuk tanpa ekstensi supaya aset yang MASIH
+  // direferensikan tidak pernah ikut terhapus.
+  const referencedNames = new Set([...referenced].map((name) => name.replace(/\.[^.]+$/, '')));
+
+  // Lewati bila Cloudinary tidak terkonfigurasi (mode disk lokal) —
+  // import + search dengan kredensial palsu hanya menghasilkan noise error.
+  const { CLOUDINARY_ENABLED } = await import('../config/cloudinary.js');
+  if (!CLOUDINARY_ENABLED) {
+    return { deleted: 0, errors: 0, skipped: true };
+  }
 
   try {
     const { v2: cloudinary } = await import('cloudinary');
@@ -55,9 +62,10 @@ const cleanupCloudinaryOrphans = async (referenced) => {
 
     const resources = result?.resources || [];
     for (const resource of resources) {
-      // public_id "tuu-proof-<uuid>" ↔ nama berkas DB "proof-<uuid>".
-      const fileName = resource.public_id.replace(/^tuu-/, '');
-      if (referenced.has(fileName)) continue;
+      // public_id "tuu-proof-<uuid>" ↔ nama berkas DB "proof-<uuid>.png".
+      const storedName = storedNameFromPublicId(resource.public_id);
+      if (!storedName) continue;
+      if (referencedNames.has(storedName)) continue;
 
       try {
         await cloudinary.uploader.destroy(resource.public_id, {
@@ -123,7 +131,7 @@ export const runDailyCleanup = async () => {
   const referenced = await collectReferencedFiles();
 
   const results = {};
-  if (hasCloudinaryCreds()) {
+  if (hasCloudinaryCredentials()) {
     results.cloudinary = await cleanupCloudinaryOrphans(referenced);
     console.log(
       `🧹 Cloudinary: ${results.cloudinary.deleted} asset dihapus, ${results.cloudinary.errors} error`

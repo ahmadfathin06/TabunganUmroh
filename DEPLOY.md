@@ -57,6 +57,45 @@ Upload berkas (KTP, paspor, bukti transfer) di Vercel wajib lewat Cloudinary
 > Catatan: asset disimpan sebagai **private** (`type: authenticated`) dan hanya
 > bisa dilihat lewat endpoint ber-otentikasi (`/api/documents/:id/file`,
 > `/api/deposits/:id/proof`). Jangan ubah visibilitasnya menjadi publik.
+>
+> Detail:
+> - Nama berkas yang disimpan di DB TIDAK memuat prefix; prefix `tuu-` hanya
+>   ditambahkan saat membentuk `public_id` Cloudinary (lihat `fileStorage.js`).
+> - Pengambilan berkas memakai **signed download URL** berumur pendek
+>   (`private_download_url`), bukan URL publik.
+> - Batas berkas **2MB**, hanya JPG/PNG/PDF; ekstensi ditentukan server dari MIME.
+> - Cleanup harian hanya menghapus aset `type:authenticated` ber-prefix `tuu-`
+>   yang **tidak** direferensikan database.
+>
+> Nilai contoh seperti `your_cloud_name` dianggap **belum dikonfigurasi**, jadi
+> upload otomatis jatuh ke mode disk — pastikan ketiga variabel di atas diisi
+> dengan nilai asli agar upload bekerja di Vercel.
+
+## 2b. Siapkan Resend (email, opsional)
+
+Email hanya perlu bila fitur notifikasi email diaktifkan. Aplikasi tetap
+berjalan normal tanpa konfigurasi ini (`EMAIL_ENABLED=false`).
+
+1. Buat akun di <https://resend.com>.
+2. Tambahkan dan **verifikasi domain pengirim** (DNS records SPF/DKIM).
+3. Buat **API key** dengan permission *Sending access* (batasi ke domain bila tersedia).
+4. Simpan API key hanya di `server/.env` lokal atau Vercel Environment Variables —
+   **jangan** di file yang di-commit, client, atau log.
+5. Isi `RESEND_FROM_EMAIL` dengan alamat pada domain yang sudah diverifikasi
+   (mis. `noreply@mail.domain-kamu.com`).
+6. Set `EMAIL_ENABLED=true` **hanya setelah** langkah di atas selesai.
+
+Perilaku error (lihat `server/src/config/mailer.js`):
+
+- `EMAIL_ENABLED=false` → email dilewati (`{ skipped: true }`), tidak menggagalkan server.
+- `EMAIL_ENABLED=true` tetapi konfigurasi tidak lengkap → **fail fast** dengan pesan
+  yang hanya menyebut nama variabel (tanpa nilai).
+- Error provider dipetakan menjadi error aman sebelum dipropagasikan ke caller;
+  detail mentah hanya masuk log server.
+- Pola fire-and-forget tersedia (`sendEmailInBackground`) untuk email non-kritis.
+
+> Adapter ini sudah siap dipakai, tetapi belum dipanggil oleh alur bisnis mana pun.
+> Jangan mengirim email tanpa kebutuhan produk yang jelas.
 
 ## 3. Push ke GitHub lalu import di Vercel
 
@@ -81,7 +120,12 @@ Pilih environment **Production, Preview, Development** semua.
 | `VAPID_PUBLIC_KEY` | `npx web-push generate-vapid-keys` (opsional, untuk Web Push) |
 | `VAPID_PRIVATE_KEY` | idem |
 | `VAPID_SUBJECT` | `mailto:email@kamu.com` |
-| `SMTP_*` / `FONNTE_*` | opsional, isi bila fitur email/WhatsApp dipakai |
+| `RESEND_API_KEY` | API key Resend (permission *Sending access*). Opsional — hanya bila email dipakai. **Jangan pernah commit nilai ini.** |
+| `RESEND_FROM_EMAIL` | alamat pengirim pada domain Resend yang **sudah diverifikasi** |
+| `RESEND_FROM_NAME` | opsional, nama pengirim (default `Tabunganku Umroh`) |
+| `RESEND_REPLY_TO` | opsional |
+| `EMAIL_ENABLED` | `false` (default) atau `true`. Bila `true`, `RESEND_API_KEY` + `RESEND_FROM_EMAIL` **wajib** — server menolak start bila belum lengkap |
+| `FONNTE_*` | opsional, isi bila fitur WhatsApp dipakai |
 | `CRON_SECRET` | string acak (opsional, lapis kedua guard cron) |
 | `FRONTEND_URL` | **kosongkan** untuk deploy satu domain. Isi `https://domain-kamu` hanya bila frontend di-host terpisah |
 
@@ -107,13 +151,37 @@ DATABASE_URL="<connection-string>" npx prisma db push --accept-data-loss
 
 ```bash
 curl https://nama-project.vercel.app/api/health
-# → {"status":"OK",...}
+# → {
+#     "status":"OK",
+#     "database":"OK",
+#     "cloudinary":"configured",
+#     "email":"disabled",
+#     "timestamp":"...",
+#     "uptime":123
+#   }
 ```
 
+Health check memeriksa: proses hidup, koneksi database (`SELECT 1`), serta
+**status** konfigurasi Cloudinary dan email. Endpoint ini publik dan **tidak
+pernah** membocorkan kredensial atau detail error internal. Bila database
+bermasalah, respons menjadi HTTP **503** dengan `status: "DEGRADED"` dan
+`database: "ERROR"`.
+
+Nilai yang diharapkan di production:
+
+- `database` harus `OK` (kalau `ERROR`, periksa `DATABASE_URL`/pooler).
+- `cloudinary` harus `configured` (kalau `disabled`, upload tidak akan jalan).
+- `email` `disabled` bila email memang dimatikan, atau `enabled` bila dikonfigurasi.
+
+Selain itu:
+
 - Buka situs → register/login berfungsi.
-- Upload dokumen → berkas tersimpan di Cloudinary (folder `tabunganku-umroh/`).
+- Upload dokumen → berkas tersimpan di Cloudinary sebagai asset privat.
 - Cek tab **Vercel → Cron Jobs**: dua jadwal (`/api/cron/cleanup` harian,
   `/api/cron/reminder` tanggal 25) muncul dan tercatat berjalan.
+
+> Cron dipicu lewat `GET /api/cron/reminder` & `GET /api/cron/cleanup` dengan
+> guard header `x-vercel-cron`, `CRON_SECRET` (`Authorization: Bearer ...`), atau role admin.
 
 ## Menjalankan lokal (tetap seperti semula)
 
@@ -128,6 +196,12 @@ menyamakan perilaku dengan production.
 
 ## Catatan penting
 
+- **Secret tidak boleh masuk Git.** `RESEND_API_KEY`, `JWT_*_SECRET`,
+  `DATABASE_URL`, `CLOUDINARY_API_SECRET`, `CRON_SECRET`, dan VAPID private key
+  hanya di `server/.env` (gitignored) atau Vercel Environment Variables.
+  Jangan memakai prefix `VITE_` untuk secret — nilai `VITE_*` ikut ter-bundle ke client.
+- **Jangan ubah asset Cloudinary menjadi public.** Dokumen KTP/paspor/foto dan
+  bukti transfer harus tetap `type: authenticated`.
 - **Jalankan `prisma db push`** setelah mengubah `schema.prisma` (dari lokal).
 - `vercel.json` memakai jadwal cron **UTC**: cleanup `0 20 * * *`
   (03:00 WIB), reminder `0 2 25 * *` (09:00 WIB tanggal 25).

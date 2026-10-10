@@ -1,3 +1,9 @@
+// WAJIB paling awal: memuat .env + validasi konfigurasi sebelum modul lain
+// membaca process.env. Kritikal untuk bundle serverless (api/index.js): bundle
+// dibangun dari app.js — TANPA import ini dotenv tidak pernah dijalankan di
+// production sehingga DATABASE_URL kosong dan semua endpoint DB gagal 500.
+import './config/env.js';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

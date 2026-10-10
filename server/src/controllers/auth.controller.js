@@ -43,7 +43,15 @@ const authController = {
 
       // Hash password
       const hashedPassword = await bcrypt.hash(password, 12);
-      const myReferralCode = generateReferralCode(name);
+
+      // referral_code unik di DB — kalau kebetulan tabrakan, generate ulang
+      // (max 5x) daripada langsung gagal dengan P2002 → 500.
+      let myReferralCode = generateReferralCode(name);
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const clash = await prisma.user.findUnique({ where: { referralCode: myReferralCode } });
+        if (!clash) break;
+        myReferralCode = generateReferralCode(name);
+      }
 
       // Simpan user baru
       const user = await prisma.user.create({
@@ -107,6 +115,12 @@ const authController = {
       }, 'Registrasi berhasil');
     } catch (error) {
       console.error('Register error:', error);
+      // Duplikat unik (email/phone/referral code) yang lolos cek awal → 409,
+      // bukan 500 generik.
+      if (error.code === 'P2002') {
+        const field = Array.isArray(error.meta?.target) ? error.meta.target.join(', ') : 'data';
+        return ApiResponse.error(res, `Data sudah terdaftar (${field})`, 409);
+      }
       return ApiResponse.error(res, 'Gagal melakukan registrasi');
     }
   },

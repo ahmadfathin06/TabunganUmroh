@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import prisma from '../config/database.js';
+import { buildHealthReport } from '../utils/health.js';
 import authRoutes from './auth.routes.js';
 import packageRoutes from './package.routes.js';
 import savingsRoutes from './savings.routes.js';
@@ -24,12 +26,22 @@ router.use('/notifications', notificationRoutes);
 router.get('/cron/reminder', cronGuard, runReminder);
 router.get('/cron/cleanup', cronGuard, runCleanup);
 
-router.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  });
+/**
+ * GET /api/health — health check ringan.
+ *
+ * Memeriksa: proses hidup, koneksi database (`SELECT 1`), dan STATUS konfigurasi
+ * Cloudinary/email. Tidak pernah mengirim email, upload, atau membocorkan
+ * kredensial/detail error internal (endpoint ini publik).
+ */
+router.get('/health', async (req, res) => {
+  const { healthy, dbError, report } = await buildHealthReport(prisma);
+
+  // Detail error hanya di log server, bukan di respons publik.
+  if (dbError) {
+    console.error('❌ Health check: database tidak dapat diakses:', dbError?.message || dbError);
+  }
+
+  res.status(healthy ? 200 : 503).json(report);
 });
 
 export default router;

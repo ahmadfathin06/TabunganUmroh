@@ -29,5 +29,8 @@
     "esbuild@0.28.2": true,
     "msgpackr-extract@3.0.4": true,
     "workerd@1.20260704.1": true
+  },
+  "dependencies": {
+    "next-cloudinary": "^6.19.3"
   }
 }

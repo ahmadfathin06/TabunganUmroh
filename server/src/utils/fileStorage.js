@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
+import { hasCloudinaryCredentials } from './credentials.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,20 +47,45 @@ export const resolveStoredFile = (stored) => {
   return name;
 };
 
-const hasCloudinaryCreds = () =>
-  Boolean(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
-  );
+/**
+ * Prefix public_id Cloudinary untuk seluruh aset aplikasi (Tabunganku Umroh).
+ * Dipakai untuk namespacing + cleanup, dan merupakan SATU-SATUNYA sumber
+ * pemetaan nama berkas ↔ public_id (dipakai juga oleh upload middleware dan
+ * cron cleanup) agar tidak ada lagi ketidakcocokan prefix.
+ */
+export const CLOUDINARY_PREFIX = 'tuu-';
+
+/**
+ * Nama berkas tersimpan (`proof-<uuid>.png`) → public_id Cloudinary
+ * (`tuu-proof-<uuid>`).
+ *
+ * PENTING: nama di DB TIDAK memuat prefix `tuu-` (prefix hanya ditambahkan
+ * saat membentuk public_id), sehingga publikasi di sini tidak pernah menjadi
+ * `tuu-tuu-...`. Bug prefix ganda sebelumnya membuat `api.resource()` selalu
+ * gagal (public_id tidak ditemukan) dan cleanup menganggap SEMUA aset yatim.
+ */
+export const publicIdForStoredName = (storedName) => {
+  const name = resolveStoredFile(storedName);
+  if (!name) return null;
+  return `${CLOUDINARY_PREFIX}${name.replace(/\.[^.]+$/, '')}`;
+};
+
+/** public_id Cloudinary → nama berkas tersimpan tanpa prefix/ekstensi. */
+export const storedNameFromPublicId = (publicId) => {
+  if (typeof publicId !== 'string' || !publicId) return null;
+  return publicId.startsWith(CLOUDINARY_PREFIX)
+    ? publicId.slice(CLOUDINARY_PREFIX.length)
+    : publicId;
+};
 
 /**
  * Ambil isi berkas privat sebagai Buffer.
  *
  * Urutan pencarian:
  * 1. Cloudinary (bila kredensial tersedia) — private asset diunduh via
- *    signed URL hasil `cloudinary.api.resource`. Kalau asset tidak ada di
- *    Cloudinary (mis. berkas lama mode disk), lanjut ke langkah 2.
+ *    SIGNED download URL (`cloudinary.utils.private_download_url`). Kalau
+ *    asset tidak ada di Cloudinary (mis. berkas lama mode disk), lanjut ke
+ *    langkah 2.
  * 2. Disk lokal (fallback pengembangan).
  *
  * Berkas maksimal 2MB (dibatasi multer), jadi buffering aman.
@@ -78,22 +104,26 @@ export const getStoredFile = async (stored) => {
         ? 'image/png'
         : 'image/jpeg';
 
-  if (hasCloudinaryCreds()) {
+  if (hasCloudinaryCredentials()) {
     try {
       const { v2: cloudinary } = await import('cloudinary');
-      // Nama berkas DB di-map ke public_id Cloudinary: prefix `tuu-` + nama
-      // tanpa ekstensi. Ekstensi dipakai sebagai format eksplisit saat baca.
-      const publicId = `tuu-${name.replace(/\.[^.]+$/, '')}`;
+      const publicId = publicIdForStoredName(name);
       const format = ext.replace(/^\./, '') || 'jpg';
-      const resource = await cloudinary.api.resource(publicId, {
-        resource_type: 'image',
-        type: 'authenticated',
-        format,
-      });
-      const response = await fetch(resource.secure_url);
-      if (response.ok) {
-        const buffer = Buffer.from(await response.arrayBuffer());
-        return { buffer, contentType };
+
+      if (publicId) {
+        // Aset disimpan `type: authenticated` sehingga TIDAK bisa diakses lewat
+        // URL publik. Ambil lewat SIGNED download URL yang kedaluwarsa singkat,
+        // bukan `secure_url` biasa (yang akan ditolak 401 untuk aset privat).
+        const url = cloudinary.utils.private_download_url(publicId, format, {
+          resource_type: 'image',
+          type: 'authenticated',
+          expires_at: Math.floor(Date.now() / 1000) + 60, // berlaku 60 detik
+        });
+        const response = await fetch(url);
+        if (response.ok) {
+          const buffer = Buffer.from(await response.arrayBuffer());
+          return { buffer, contentType };
+        }
       }
       // Cloudinary merespons error (mis. asset tidak ada) → coba disk.
     } catch {
@@ -143,4 +173,12 @@ export const streamStoredFile = async (stored, res) => {
   }
 };
 
-export default { UPLOADS_DIR, ensureUploadsDir, resolveStoredFile, streamStoredFile };
+export default {
+  UPLOADS_DIR,
+  ensureUploadsDir,
+  resolveStoredFile,
+  streamStoredFile,
+  CLOUDINARY_PREFIX,
+  publicIdForStoredName,
+  storedNameFromPublicId,
+};

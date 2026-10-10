@@ -24,6 +24,10 @@ client/.env
 server/src/uploads/*
 !server/src/uploads/.gitkeep
 
+# Artefak E2E (screenshot & file bukti yang dibuat e2e.js saat run)
+client/e2e/shots/
+client/e2e/proof.png
+
 # IDE & OS
 .vscode/
 .idea/

@@ -1,7 +1,8 @@
 import multer from 'multer';
 import path from 'path';
 import crypto from 'crypto';
-import { UPLOADS_DIR, ensureUploadsDir } from '../utils/fileStorage.js';
+import { UPLOADS_DIR, ensureUploadsDir, CLOUDINARY_PREFIX } from '../utils/fileStorage.js';
+import { hasCloudinaryCredentials } from '../utils/credentials.js';
 
 ensureUploadsDir().catch(() => {});
 
@@ -15,12 +16,12 @@ ensureUploadsDir().catch(() => {});
  * controller, DB, dan UI tidak perlu tahu di mana berkas fisik disimpan.
  * Nama berkas inilah yang dipetakan ke public_id Cloudinary (lihat
  * fileStorage.getStoredFile).
+ *
+ * CATATAN: nilai placeholder `.env.example` (`your_cloud_name` dll.) dianggap
+ * TIDAK diset — kalau tidak, upload mencoba ke Cloudinary dengan kredensial
+ * palsu dan gagal 500 ("Must supply api_key") padahal mode disk lokal tersedia.
  */
-const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
-const API_KEY = process.env.CLOUDINARY_API_KEY;
-const API_SECRET = process.env.CLOUDINARY_API_SECRET;
-
-export const isCloudinaryEnabled = Boolean(CLOUD_NAME && API_KEY && API_SECRET);
+export const isCloudinaryEnabled = hasCloudinaryCredentials();
 export const isDiskMode = !isCloudinaryEnabled;
 
 /**
@@ -35,7 +36,7 @@ export const isDiskMode = !isCloudinaryEnabled;
  * Sekarang ekstensi selalu ditentukan server dari MIME yang lolos whitelist,
  * jadi tidak mungkin ada berkas .html/.js/.svg di folder upload.
  */
-const MIME_EXTENSION = {
+export const MIME_EXTENSION = {
   'image/jpeg': 'jpg',
   'image/jpg': 'jpg',
   'image/pjpeg': 'jpg',
@@ -43,13 +44,14 @@ const MIME_EXTENSION = {
   'application/pdf': 'pdf',
 };
 
-/**
- * Public id Cloudinary dibuat TANPA ekstensi dan dengan prefix `tuu-`
- * (Tabunganku Umroh) agar mudah dinamespacing/dibersihkan lewat prefix.
- * Ekstensi dikirim terpisah pada waktu baca (format eksplisit).
- */
-const CLOUD_PREFIX = 'tuu-';
+/** Batas ukuran berkas yang diizinkan (2MB). */
+export const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 
+/**
+ * Public id Cloudinary dibuat TANPA ekstensi dan memakai prefix bersama
+ * `CLOUDINARY_PREFIX` (`tuu-`), sementara NAMA BERKAS tersimpan tidak memuat
+ * prefix. Ekstensi dikirim terpisah pada waktu baca (format eksplisit).
+ */
 const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
@@ -70,7 +72,7 @@ const fileFilter = (req, file, cb) => {
 
 const multerOptions = {
   fileFilter,
-  limits: { fileSize: 2 * 1024 * 1024, files: 1 }, // Max 2MB, satu berkas per request
+  limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 }, // Max 2MB, satu berkas per request
 };
 
 // Cloudinary mode butuh buffer penuh (upload_stream); disk mode tulis langsung.
@@ -96,7 +98,11 @@ export const handleUpload = (fieldName) => [
     try {
       const { v2: cloudinary } = await import('cloudinary');
       const ext = MIME_EXTENSION[req.file.mimetype] || '';
-      const publicId = `${CLOUD_PREFIX}${req.file.fieldname}-${crypto.randomUUID()}`;
+      // Nama berkas tersimpan dibuat TANPA prefix. Prefix `tuu-` hanya
+      // ditambahkan saat membentuk public_id agar pemetaan nama↔public_id
+      // konsisten satu arah (lihat fileStorage.publicIdForStoredName).
+      const storedName = `${req.file.fieldname}-${crypto.randomUUID()}`;
+      const publicId = `${CLOUDINARY_PREFIX}${storedName}`;
 
       await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -114,7 +120,7 @@ export const handleUpload = (fieldName) => [
         stream.end(req.file.buffer);
       });
 
-      req.file.filename = `${publicId}${ext ? `.${ext}` : ''}`;
+      req.file.filename = `${storedName}${ext ? `.${ext}` : ''}`;
       req.file.storage = 'cloudinary';
       return next();
     } catch (error) {

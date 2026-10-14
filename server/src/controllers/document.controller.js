@@ -1,8 +1,9 @@
 import prisma from '../config/database.js';
 import ApiResponse from '../utils/apiResponse.js';
 import { createNotification } from '../services/notification.service.js';
-import { streamStoredFile } from '../utils/fileStorage.js';
+import { streamStoredFile, destroyStoredFile } from '../utils/fileStorage.js';
 import { safeOriginalName } from '../middlewares/upload.middleware.js';
+import { auditLog } from '../services/audit.service.js';
 
 const TYPE_LABEL = { KTP: 'KTP', PASSPORT: 'Paspor', PHOTO: 'Pas foto', OTHER: 'Dokumen' };
 
@@ -23,30 +24,66 @@ const documentController = {
     }
   },
 
-  /** POST /api/documents — upload dokumen (field: document, body: type) */
+  /**
+   * POST /api/documents — upload dokumen (field: document, body: type).
+   *
+   * Field `type` sudah divalidasi ZOD SEBELUM Cloudinary
+   * dipanggil (lihat routes/document.routes.js).
+   *
+   * REPLACE AMAN (P0): satu dokumen aktif per tipe.
+   *   1. upload file baru (sudah terjadi di persistUpload);
+   *   2. buat record baru;
+   *   3. tandai/hapus record lama;
+   *   4. bila langkah 2/3 gagal → pertahankan record lama
+   *      dan hapus asset baru (rollback).
+   */
   upload: async (req, res) => {
     try {
       const { type } = req.validatedData;
       if (!req.file) return ApiResponse.error(res, 'File dokumen wajib diupload', 400);
 
-      // Satu dokumen aktif per tipe: dokumen lama bertipe sama dihapus (file fisik dibiarkan)
-      await prisma.document.deleteMany({
+      const fileUrl = `/uploads/${req.file.filename}`;
+
+      // Cari dokumen aktif lama bertipe sama (untuk diganti).
+      const oldDocs = await prisma.document.findMany({
         where: { userId: req.user.id, type },
+        select: { id: true, fileUrl: true },
       });
 
-      const document = await prisma.document.create({
-        data: {
-          userId: req.user.id,
-          type,
-          fileUrl: `/uploads/${req.file.filename}`,
-          // Nama asli dari client dinormalisasi (hanya untuk tampilan).
-          fileName: safeOriginalName(req.file.originalname),
-        },
-      });
+      let document;
+      try {
+        document = await prisma.document.create({
+          data: {
+            userId: req.user.id,
+            type,
+            fileUrl,
+            // Nama asli dari client dinormalisasi (hanya untuk tampilan).
+            fileName: safeOriginalName(req.file.originalname),
+          },
+        });
+
+        // Record baru berhasil → nonaktifkan record lama.
+        if (oldDocs.length > 0) {
+          await prisma.document.deleteMany({
+            where: { id: { in: oldDocs.map((d) => d.id) } },
+          });
+          // Bersihkan asset lama (best-effort) — cegah orphan.
+          for (const old of oldDocs) {
+            if (old.fileUrl && old.fileUrl !== fileUrl) {
+              destroyStoredFile(old.fileUrl).catch(() => {});
+            }
+          }
+        }
+      } catch (error) {
+        // Gagal membuat/hapus record → pertahankan record lama,
+        // hapus asset baru agar tidak orphan.
+        await destroyStoredFile(fileUrl).catch(() => {});
+        throw error;
+      }
 
       return ApiResponse.created(res, document, 'Dokumen berhasil diupload, menunggu verifikasi admin');
     } catch (error) {
-      console.error('Upload document error:', error);
+      console.error('Upload document error:', error?.message || error);
       return ApiResponse.error(res, 'Gagal upload dokumen');
     }
   },
@@ -121,6 +158,13 @@ const documentController = {
           verifiedAt: new Date(),
           ...(action === 'reject' && { rejectionReason: rejectionReason.trim() }),
         },
+      });
+
+      auditLog(req, 'admin', 'document.verify', {
+        documentId: document.id,
+        userId: document.user.id,
+        type: document.type,
+        status: updated.status,
       });
 
       // Notifikasi DOCUMENT_VERIFIED (realtime + Web Push)

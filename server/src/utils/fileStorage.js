@@ -173,11 +173,49 @@ export const streamStoredFile = async (stored, res) => {
   }
 };
 
+/**
+ * Hapus asset tersimpan (rollback setelah upload gagal).
+ * Dipakai controller untuk membersihkan asset Cloudinary/disk
+ * bila update database gagal setelah storage sukses.
+ *
+ * Best-effort — kegagalan penghapusan tidak pernah melempar.
+ *
+ * @param {string} stored nilai DB `/uploads/<nama>.<ext>` atau nama berkas
+ */
+export const destroyStoredFile = async (stored) => {
+  const name = resolveStoredFile(stored);
+  if (!name) return;
+
+  if (hasCloudinaryCredentials()) {
+    try {
+      const { v2: cloudinary } = await import('cloudinary');
+      const publicId = publicIdForStoredName(name);
+      if (publicId) {
+        await cloudinary.uploader.destroy(publicId, {
+          resource_type: 'image',
+          type: 'authenticated',
+          invalidate: true,
+        });
+        return;
+      }
+    } catch {
+      // fallback ke disk bila Cloudinary gagal
+    }
+  }
+
+  try {
+    await fs.unlink(path.join(UPLOADS_DIR, name));
+  } catch {
+    // tidak ada / sudah terhapus — abaikan
+  }
+};
+
 export default {
   UPLOADS_DIR,
   ensureUploadsDir,
   resolveStoredFile,
   streamStoredFile,
+  destroyStoredFile,
   CLOUDINARY_PREFIX,
   publicIdForStoredName,
   storedNameFromPublicId,

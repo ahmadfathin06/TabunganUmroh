@@ -310,3 +310,21 @@ model Setting {
 
   @@map("settings")
 }
+
+/// Kunci idempotensi untuk aksi sensitif (buat setoran, verifikasi
+/// setoran). Menyimpan hash payload + respons sehingga retry
+/// request yang sama tidak menggandakan efek (saldo, notifikasi).
+model IdempotencyKey {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  scope     String   @map("scope")
+  key       String   @map("key")
+  payload   String?  @map("payload")
+  response  String?  @map("response")
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  @@unique([userId, scope, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}

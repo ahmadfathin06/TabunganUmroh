@@ -52,31 +52,59 @@ const cleanupCloudinaryOrphans = async (referenced) => {
     return { deleted: 0, errors: 0, skipped: true };
   }
 
+  // DRY_RUN=true: tampilkan kandidat tanpa menghapus apa pun.
+  const isDryRun = String(process.env.DRY_RUN ?? '').trim().toLowerCase() === 'true';
+  if (isDryRun) {
+    console.log('🔍 DRY_RUN=true — cleanup Cloudinary dalam mode preview (tidak ada yang dihapus)');
+  }
+
   try {
     const { v2: cloudinary } = await import('cloudinary');
 
-    const result = await cloudinary.search
-      .expression('resource_type:image AND type:authenticated AND public_id:tuu-*')
-      .max_results(500)
-      .execute();
+    // Pagination cursor-based menggantikan max_results(500) — semua asset diproses.
+    // Cleanup HANYA menyentuh namespace `tuu-*` milik aplikasi ini.
+    let nextCursor;
+    let totalCandidates = 0;
 
-    const resources = result?.resources || [];
-    for (const resource of resources) {
-      // public_id "tuu-proof-<uuid>" ↔ nama berkas DB "proof-<uuid>.png".
-      const storedName = storedNameFromPublicId(resource.public_id);
-      if (!storedName) continue;
-      if (referencedNames.has(storedName)) continue;
+    do {
+      const searchBuilder = cloudinary.search
+        .expression('resource_type:image AND type:authenticated AND public_id:tuu-*')
+        .max_results(100);
 
-      try {
-        await cloudinary.uploader.destroy(resource.public_id, {
-          resource_type: 'image',
-          type: 'authenticated',
-          invalidate: true,
-        });
-        deleted += 1;
-      } catch {
-        errors += 1;
+      if (nextCursor) searchBuilder.next_cursor(nextCursor);
+
+      const result = await searchBuilder.execute();
+      const resources = result?.resources || [];
+      nextCursor = result?.next_cursor;
+
+      for (const resource of resources) {
+        // public_id "tuu-proof-<uuid>" ↔ nama berkas DB "proof-<uuid>.png".
+        const storedName = storedNameFromPublicId(resource.public_id);
+        if (!storedName) continue;
+        if (referencedNames.has(storedName)) continue;
+
+        totalCandidates += 1;
+        // Hanya public_id (namespace aman) — tidak pernah berisi PII.
+        console.log(`🗑️  Kandidat orphan: ${resource.public_id}`);
+
+        if (isDryRun) continue; // DRY_RUN: skip penghapusan
+
+        try {
+          await cloudinary.uploader.destroy(resource.public_id, {
+            resource_type: 'image',
+            type: 'authenticated',
+            invalidate: true,
+          });
+          deleted += 1;
+        } catch {
+          errors += 1;
+        }
       }
+    } while (nextCursor);
+
+    if (isDryRun) {
+      console.log(`🔍 DRY_RUN: ${totalCandidates} asset kandidat orphan (tidak ada yang dihapus)`);
+      return { deleted: 0, errors: 0, candidates: totalCandidates, dryRun: true };
     }
   } catch (error) {
     console.error('❌ Cleanup Cloudinary gagal:', error.message);

@@ -163,6 +163,9 @@ npm run db:push --prefix server
 
 # (opsional) data awal: admin, user demo, bank, paket umroh
 npm run db:seed --prefix server
+
+# (opsional) hanya akun admin — tanpa data demo
+npm run db:seed:admin --prefix server
 ```
 
 **Seed admin:** `ADMIN_PASSWORD` minimal 12 karakter. Bila dikosongkan saat
@@ -175,6 +178,12 @@ Akun hasil seed (development):
 |---|---|---|
 | Admin | `ADMIN_EMAIL` (default `admin@tabunganku.com`) | `ADMIN_PASSWORD` (acak bila kosong) |
 | User demo | `jamaah@tabunganku.com` | `Password123` (development) |
+
+---
+
+`npm run db:seed:admin` memakai `ADMIN_EMAIL`/`ADMIN_PASSWORD` yang sama namun
+melewati user demo, bank, paket umroh, dan setoran — berguna bila database sudah
+berisi data asli.
 
 ---
 

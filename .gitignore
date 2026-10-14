@@ -13,10 +13,16 @@ server/src/generated/
 # Bundel serverless (dibangun ulang oleh `npm run build:api --prefix server` saat build)
 server/.build/
 
-# Environment
+# Environment (semua varian .env diabaikan; hanya *.env.example yang boleh di-commit)
 .env
+.env.*
+!.env.example
 server/.env
+server/.env.*
+!server/.env.example
 client/.env
+client/.env.*
+!client/.env.example
 .env.local
 *.env.backup
 

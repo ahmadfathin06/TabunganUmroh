@@ -11,6 +11,7 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import routes from './routes/index.js';
 import { generalLimiter } from './middlewares/rateLimiter.middleware.js';
+import { requestContext, redact } from './utils/requestContext.js';
 
 const app = express();
 
@@ -28,6 +29,13 @@ app.disable('x-powered-by');
  * aman dengan nilai ini.
  */
 app.set('trust proxy', 1);
+
+/**
+ * Correlation / request ID — dipasang sesegera mungkin agar setiap
+ * error & audit log dapat ditelusuri via `x-request-id` tanpa
+ * mencetak token/secret/PII.
+ */
+app.use(requestContext);
 
 /**
  * Helmet hardening untuk backend API REST.
@@ -146,10 +154,16 @@ app.use((err, req, res, next) => {
 
   const status = err?.status || err?.statusCode || 500;
 
-  // Pesan asli hanya dicatat di server. Detail internal (mis. error Prisma yang
-  // menyebut nama tabel/kolom) tidak boleh dikirim ke client pada 5xx.
+  // Log server memakai redaksi — Authorization/Cookie/password/token/
+  // connection string tidak pernah tercetak. Request ID disertakan
+  // agar error dapat ditelusuri.
   if (status >= 500) {
-    console.error('❌ Error:', err);
+    console.error(JSON.stringify({
+      level: 'error',
+      requestId: req.id || null,
+      message: 'Unhandled error',
+      error: redact(err),
+    }));
   }
 
   res.status(status).json({

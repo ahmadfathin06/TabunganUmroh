@@ -3,56 +3,119 @@ import ApiResponse from '../utils/apiResponse.js';
 import generateUniqueCode from '../utils/generateUniqueCode.js';
 import { getPagination } from '../utils/paginationHelper.js';
 import { notify } from '../services/notification.service.js';
-import { streamStoredFile } from '../utils/fileStorage.js';
+import { streamStoredFile, destroyStoredFile } from '../utils/fileStorage.js';
+import {
+  findExisting,
+  save,
+  normalizeKey,
+  hashPayload,
+} from '../services/idempotency.service.js';
+import { auditLog } from '../services/audit.service.js';
+
+const RACE_CODE = 'DEPOSIT_RACE';
+
+/**
+ * Konversi number ke string Decimal aman (2 tempat desimal).
+ * Prisma menyimpan `Decimal` — aritmetika floating point
+ * (parseFloat) dapat menghasilkan saldo melenceng. Semua
+ * operasi uang dihitung dalam CENTS (integer) lalu
+ * dikonversi ke string desimal.
+ */
+const toDecimal = (value) => {
+  const cents = Math.round(Number(value) * 100);
+  if (!Number.isFinite(cents)) throw new Error('Jumlah tidak valid');
+  return (cents / 100).toFixed(2);
+};
 
 const depositController = {
   create: async (req, res) => {
     try {
       const { savingsPlanId, amount, bankAccountId } = req.validatedData;
+      const idemKey = normalizeKey(req.get('idempotency-key'));
+
+      // Idempotency: replay bila kunci sama sudah pernah diproses.
+      const payloadHash = hashPayload({ savingsPlanId, amount, bankAccountId });
+      if (idemKey) {
+        const existing = await findExisting({
+          userId: req.user.id,
+          scope: 'deposit.create',
+          key: idemKey,
+          payloadHash,
+        });
+        if (existing.replay) {
+          return ApiResponse.success(res, existing.replay.response, 'Setoran sudah dibuat (idempoten)');
+        }
+        if (existing.conflict) {
+          return ApiResponse.error(res, 'Kunci idempotensi sudah dipakai dengan payload berbeda', 409);
+        }
+      }
 
       const savingsPlan = await prisma.savingsPlan.findFirst({
         where: { id: savingsPlanId, userId: req.user.id, status: 'ACTIVE' },
       });
       if (!savingsPlan) return ApiResponse.error(res, 'Rencana tabungan tidak ditemukan', 404);
 
-      const bankAccount = await prisma.bankAccount.findFirst({
-        where: { id: bankAccountId, isActive: true },
-      });
-      if (!bankAccount) return ApiResponse.error(res, 'Rekening tujuan tidak valid', 400);
+      // Batas nominal (Rp 10.000 – Rp 100.000.000 per setoran).
+      const amountNum = Number(amount);
+      if (!Number.isFinite(amountNum) || amountNum < 10000 || amountNum > 100000000) {
+        return ApiResponse.error(res, 'Nominal setoran di luar batas (Rp 10.000 – Rp 100.000.000)', 400);
+      }
 
       const uniqueCode = await generateUniqueCode();
-      const totalTransfer = parseFloat(amount) + uniqueCode;
+      // Hitung dalam cents (integer) — bebas floating point.
+      const amountCents = Math.round(amountNum * 100);
+      const totalCents = amountCents + uniqueCode * 100;
+      const amountStr = (amountCents / 100).toFixed(2);
+      const totalStr = (totalCents / 100).toFixed(2);
 
       const deposit = await prisma.deposit.create({
         data: {
           savingsPlanId,
-          amount: parseFloat(amount),
+          amount: amountStr,
           uniqueCode,
-          totalTransfer,
+          totalTransfer: totalStr,
           bankAccountId,
           status: 'PENDING',
           paymentMethod: 'TRANSFER',
         },
         include: {
           bankAccount: {
-            select: { bankName: true, accountNumber: true, accountHolder: true },
+            select: { bankName: true, accountNumber: true, accountHolder: true, isActive: true },
           },
         },
       });
 
-      return ApiResponse.created(res, {
+      // Rekening harus tetap aktif pada saat pembuatan.
+      if (!deposit.bankAccount || !deposit.bankAccount.isActive) {
+        await prisma.deposit.delete({ where: { id: deposit.id } }).catch(() => {});
+        return ApiResponse.error(res, 'Rekening tujuan tidak aktif', 400);
+      }
+
+      const response = {
         deposit,
         transferInfo: {
           bank: deposit.bankAccount.bankName,
           accountNumber: deposit.bankAccount.accountNumber,
           accountHolder: deposit.bankAccount.accountHolder,
-          amount: parseFloat(amount),
+          amount: Number(amountStr),
           uniqueCode,
-          totalTransfer,
+          totalTransfer: Number(totalStr),
         },
-      }, 'Setoran berhasil dibuat. Silakan transfer dan upload bukti.');
+      };
+
+      if (idemKey) {
+        await save({
+          userId: req.user.id,
+          scope: 'deposit.create',
+          key: idemKey,
+          payloadHash,
+          response,
+        }).catch(() => {});
+      }
+
+      return ApiResponse.created(res, response, 'Setoran berhasil dibuat. Silakan transfer dan upload bukti.');
     } catch (error) {
-      console.error('Create deposit error:', error);
+      console.error('Create deposit error:', error?.message || error);
       return ApiResponse.error(res, 'Gagal membuat setoran');
     }
   },
@@ -60,25 +123,39 @@ const depositController = {
   uploadProof: async (req, res) => {
     try {
       const { id } = req.params;
-      const deposit = await prisma.deposit.findFirst({
-        where: {
-          id,
-          savingsPlan: { userId: req.user.id },
-          status: 'PENDING',
-        },
-      });
-      if (!deposit) return ApiResponse.error(res, 'Setoran tidak ditemukan', 404);
+      // Preflight (middleware) sudah memastikan deposit ada,
+      // milik user, dan PENDING — sebelum Cloudinary dipanggil.
       if (!req.file) return ApiResponse.error(res, 'File bukti wajib diupload', 400);
 
       const proofImage = `/uploads/${req.file.filename}`;
-      const updated = await prisma.deposit.update({
-        where: { id },
+      const oldProof = req.preflight?.oldProofImage;
+
+      // UPDATE KONDISIONAL: hanya berhasil bila masih PENDING.
+      // Dua request paralel tidak dapat saling menimpa.
+      const updated = await prisma.deposit.updateMany({
+        where: { id, status: 'PENDING' },
         data: { proofImage },
       });
 
-      return ApiResponse.success(res, updated, 'Bukti transfer berhasil diupload');
+      if (updated.count === 0) {
+        // Kalah race (status berubah) — hapus asset yang baru
+        // dibuat agar tidak menjadi orphan.
+        await destroyStoredFile(proofImage).catch(() => {});
+        return ApiResponse.error(res, 'Setoran sudah diverifikasi — bukti tidak dapat diganti', 409);
+      }
+
+      // Bersihkan bukti lama (best-effort) — cegah orphan asset.
+      if (oldProof && oldProof !== proofImage) {
+        destroyStoredFile(oldProof).catch(() => {});
+      }
+
+      return ApiResponse.success(res, { proofImage }, 'Bukti transfer berhasil diupload');
     } catch (error) {
-      console.error('Upload proof error:', error);
+      // Database gagal setelah Cloudinary sukses → rollback asset.
+      if (req.file?.filename) {
+        await destroyStoredFile(`/uploads/${req.file.filename}`).catch(() => {});
+      }
+      console.error('Upload proof error:', error?.message || error);
       return ApiResponse.error(res, 'Gagal upload bukti');
     }
   },
@@ -105,7 +182,7 @@ const depositController = {
 
       return streamStoredFile(deposit.proofImage, res);
     } catch (error) {
-      console.error('Get deposit proof error:', error);
+      console.error('Get deposit proof error:', error?.message || error);
       return ApiResponse.error(res, 'Gagal mengambil bukti transfer');
     }
   },
@@ -116,7 +193,7 @@ const depositController = {
       const { skip, take, page: p, limit: l } = getPagination(page, limit);
 
       const where = { savingsPlan: { userId: req.user.id } };
-      if (status) where.status = status.toUpperCase();
+      if (status) where.status = String(status).toUpperCase();
 
       // Date-range filter (inclusive): from 00:00 to 23:59.999 local server time
       if (from || to) {
@@ -178,16 +255,18 @@ const depositController = {
         },
       });
     } catch (error) {
-      console.error('getMyDeposits error:', error);
+      console.error('getMyDeposits error:', error?.message || error);
       return ApiResponse.error(res, 'Gagal mengambil data setoran');
     }
   },
 
   verify: async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { action, rejectionReason } = req.validatedData;
+    const { id } = req.params;
+    const { action, rejectionReason } = req.validatedData;
+    const adminId = req.user.id;
+    const idemKey = normalizeKey(req.get('idempotency-key'));
 
+    try {
       const deposit = await prisma.deposit.findUnique({
         where: { id },
         include: {
@@ -201,78 +280,192 @@ const depositController = {
       });
 
       if (!deposit) return ApiResponse.error(res, 'Setoran tidak ditemukan', 404);
-      if (deposit.status !== 'PENDING') return ApiResponse.error(res, 'Sudah diverifikasi', 400);
+
+      // ---- Idempotency: replay bila kunci sama sudah diproses ----
+      const payloadHash = hashPayload({ id, action, rejectionReason: rejectionReason || null });
+      if (idemKey) {
+        const existing = await findExisting({
+          userId: adminId,
+          scope: 'deposit.verify',
+          key: idemKey,
+          payloadHash,
+        });
+        if (existing.replay) {
+          return ApiResponse.success(res, existing.replay.response, 'Setoran sudah diverifikasi (idempoten)');
+        }
+        if (existing.conflict) {
+          return ApiResponse.error(res, 'Kunci idempotensi sudah dipakai dengan payload berbeda', 409);
+        }
+      }
+
+      // ---- Aturan bisnis: approve wajib bukti transfer ----
+      if (action === 'approve' && !deposit.proofImage) {
+        return ApiResponse.error(res, 'Bukti transfer belum diupload — tidak dapat di-approve', 400);
+      }
+
+      // ---- Sudah final → idempotent (sama) atau 409 (berbeda) ----
+      if (deposit.status !== 'PENDING') {
+        const finalizedSame =
+          (action === 'approve' && deposit.status === 'APPROVED') ||
+          (action === 'reject' && deposit.status === 'REJECTED');
+        if (finalizedSame) {
+          return ApiResponse.success(res, null, `Setoran sudah ${action === 'approve' ? 'di-approve' : 'ditolak'} sebelumnya`);
+        }
+        return ApiResponse.error(res, 'Setoran sudah diverifikasi', 409);
+      }
 
       if (action === 'approve') {
-        const result = await prisma.$transaction(async (tx) => {
-          const updatedDeposit = await tx.deposit.update({
-            where: { id },
-            data: { status: 'APPROVED', verifiedById: req.user.id, verifiedAt: new Date() },
-          });
+        const result = await approveInTransaction(deposit, adminId);
+        const response = {
+          depositId: deposit.id,
+          isLunas: result.isLunas,
+          newBalance: result.newBalance,
+        };
 
-          const updatedSavings = await tx.savingsPlan.update({
-            where: { id: deposit.savingsPlanId },
-            data: { currentBalance: { increment: parseFloat(deposit.amount) } },
-          });
-
-          const newBalance = parseFloat(updatedSavings.currentBalance);
-          const target = parseFloat(updatedSavings.targetAmount);
-          let isLunas = false;
-
-          if (newBalance >= target) {
-            await tx.savingsPlan.update({
-              where: { id: deposit.savingsPlanId },
-              data: { status: 'PAID_OFF', paidOffAt: new Date() },
-            });
-            isLunas = true;
-          }
-
-          const notification = await tx.notification.create({
-            data: {
-              userId: deposit.savingsPlan.user.id,
-              title: isLunas ? 'Tabungan LUNAS! 🎉' : 'Setoran Diverifikasi ✅',
-              message: isLunas 
-                ? `Alhamdulillah! Tabungan untuk paket "${deposit.savingsPlan.package.name}" sudah LUNAS.`
-                : `Setoran Rp ${parseFloat(deposit.amount).toLocaleString('id-ID')} telah berhasil dikonfirmasi.`,
-              type: isLunas ? 'PAID_OFF' : 'DEPOSIT_APPROVED',
-            },
-          });
-
-          return { updatedDeposit, newBalance, isLunas, notification };
+        auditLog(req, 'admin', 'deposit.approve', {
+          depositId: deposit.id,
+          userId: deposit.savingsPlan.user.id,
+          amount: String(deposit.amount),
+          isLunas: result.isLunas,
         });
 
-        // Fire-and-forget realtime + Web Push ke semua device user
-        notify(deposit.savingsPlan.user.id, result.notification).catch(() => {});
-
-        return ApiResponse.success(res, result, 'Setoran berhasil di-approve');
-      }
-
-      if (action === 'reject') {
-        if (!rejectionReason) return ApiResponse.error(res, 'Alasan penolakan wajib diisi', 400);
-
-        await prisma.deposit.update({
-          where: { id },
-          data: { status: 'REJECTED', verifiedById: req.user.id, verifiedAt: new Date(), rejectionReason },
+        const notification = await prisma.notification.findUnique({
+          where: { id: result.notificationId },
         });
-
-        const notification = await prisma.notification.create({
-          data: {
-            userId: deposit.savingsPlan.user.id,
-            title: 'Setoran Ditolak ❌',
-            message: `Setoran Anda ditolak. Alasan: ${rejectionReason}`,
-            type: 'DEPOSIT_REJECTED',
-          },
-        });
-
         notify(deposit.savingsPlan.user.id, notification).catch(() => {});
 
-        return ApiResponse.success(res, null, 'Setoran ditolak');
+        if (idemKey) {
+          await save({
+            userId: adminId,
+            scope: 'deposit.verify',
+            key: idemKey,
+            payloadHash,
+            response,
+          }).catch(() => {});
+        }
+
+        return ApiResponse.success(res, response, 'Setoran berhasil di-approve');
       }
+
+      // action === 'reject'
+      const reason = (rejectionReason || '').trim();
+      if (!reason) return ApiResponse.error(res, 'Alasan penolakan wajib diisi', 400);
+
+      const result = await rejectInTransaction(deposit, adminId, reason);
+      const response = { depositId: deposit.id, rejected: true };
+
+      auditLog(req, 'admin', 'deposit.reject', {
+        depositId: deposit.id,
+        userId: deposit.savingsPlan.user.id,
+        reason: reason.slice(0, 100),
+      });
+
+      const notification = await prisma.notification.findUnique({
+        where: { id: result.notificationId },
+      });
+      notify(deposit.savingsPlan.user.id, notification).catch(() => {});
+
+      if (idemKey) {
+        await save({
+          userId: adminId,
+          scope: 'deposit.verify',
+          key: idemKey,
+          payloadHash,
+          response,
+        }).catch(() => {});
+      }
+
+      return ApiResponse.success(res, response, 'Setoran ditolak');
     } catch (error) {
-      console.error('Verify error:', error);
+      // Kalah race (approve/reject paralel) → 409 idempotent, BUKAN saldo ganda.
+      if (error?.code === RACE_CODE) {
+        return ApiResponse.error(res, 'Setoran sudah diverifikasi admin lain', 409);
+      }
+      console.error('Verify error:', error?.message || error);
       return ApiResponse.error(res, 'Gagal memverifikasi setoran');
     }
   },
 };
+
+/**
+ * Approval ATOMIK dalam satu transaction.
+ *
+ * Klaim status pakai UPDATE KONDISIONAL (`status = PENDING`):
+ * hanya request yang benar-benar mengubah 1 row yang boleh
+ * menambah saldo. Request yang kalah race (updateMany.count = 0)
+ * melempar RACE → 409, saldo TIDAK berubah.
+ */
+const approveInTransaction = (deposit, adminId) =>
+  prisma.$transaction(async (tx) => {
+    const claimed = await tx.deposit.updateMany({
+      where: { id: deposit.id, status: 'PENDING' },
+      data: { status: 'APPROVED', verifiedById: adminId, verifiedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      const error = new Error('Lost race: deposit sudah final');
+      error.code = RACE_CODE;
+      throw error;
+    }
+
+    const updatedSavings = await tx.savingsPlan.update({
+      where: { id: deposit.savingsPlanId },
+      data: { currentBalance: { increment: deposit.amount } },
+    });
+
+    const newBalance = Number(updatedSavings.currentBalance);
+    const target = Number(updatedSavings.targetAmount);
+    let isLunas = false;
+
+    if (newBalance >= target) {
+      await tx.savingsPlan.update({
+        where: { id: deposit.savingsPlanId },
+        data: { status: 'PAID_OFF', paidOffAt: new Date() },
+      });
+      isLunas = true;
+    }
+
+    const notification = await tx.notification.create({
+      data: {
+        userId: deposit.savingsPlan.user.id,
+        title: isLunas ? 'Tabungan LUNAS! 🎉' : 'Setoran Diverifikasi ✅',
+        message: isLunas
+          ? `Alhamdulillah! Tabungan untuk paket "${deposit.savingsPlan.package.name}" sudah LUNAS.`
+          : `Setoran Rp ${Number(deposit.amount).toLocaleString('id-ID')} telah berhasil dikonfirmasi.`,
+        type: isLunas ? 'PAID_OFF' : 'DEPOSIT_APPROVED',
+      },
+    });
+
+    return { isLunas, newBalance, notificationId: notification.id };
+  });
+
+/** Rejection ATOMIK dalam satu transaction (kondisional PENDING). */
+const rejectInTransaction = (deposit, adminId, reason) =>
+  prisma.$transaction(async (tx) => {
+    const claimed = await tx.deposit.updateMany({
+      where: { id: deposit.id, status: 'PENDING' },
+      data: {
+        status: 'REJECTED',
+        verifiedById: adminId,
+        verifiedAt: new Date(),
+        rejectionReason: reason,
+      },
+    });
+    if (claimed.count === 0) {
+      const error = new Error('Lost race: deposit sudah final');
+      error.code = RACE_CODE;
+      throw error;
+    }
+
+    const notification = await tx.notification.create({
+      data: {
+        userId: deposit.savingsPlan.user.id,
+        title: 'Setoran Ditolak ❌',
+        message: `Setoran Anda ditolak. Alasan: ${reason}`,
+        type: 'DEPOSIT_REJECTED',
+      },
+    });
+
+    return { notificationId: notification.id };
+  });
 
 export default depositController;

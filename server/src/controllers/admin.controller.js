@@ -1,6 +1,7 @@
 import prisma from '../config/database.js';
 import ApiResponse from '../utils/apiResponse.js';
 import { createNotification, createNotificationForAll } from '../services/notification.service.js';
+import { auditLog } from '../services/audit.service.js';
 
 const adminController = {
   dashboard: async (req, res) => {
@@ -94,13 +95,14 @@ const adminController = {
           select: { id: true, name: true },
         });
         if (!user) return ApiResponse.error(res, 'User tidak ditemukan', 404);
-
         await createNotification(user.id, {
           title: title.trim(),
           message: message.trim(),
           type: 'ANNOUNCEMENT',
         });
-r
+
+        auditLog(req, 'admin', 'admin.broadcast', { target, userId, sent: 1 });
+
         return ApiResponse.created(res, { sent: 1 }, `Pengumuman terkirim ke ${user.name}`);
       }
 
@@ -109,6 +111,8 @@ const adminController = {
         message: message.trim(),
         type: 'ANNOUNCEMENT',
       });
+
+      auditLog(req, 'admin', 'admin.broadcast', { target, sent });
 
       return ApiResponse.created(res, { sent }, `Pengumuman terkirim ke ${sent} jamaah`);
     } catch (error) {

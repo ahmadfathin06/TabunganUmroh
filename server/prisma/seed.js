@@ -19,6 +19,10 @@ const prisma = new PrismaClient({
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+// `npm run db:seed:admin` (atau `node prisma/seed.js --admin-only`) hanya membuat
+// akun admin, tanpa menyentuh data demo (user jamaah, bank, paket, setoran).
+const adminOnly = process.argv.includes('--admin-only');
+
 /** Password yang pernah tertulis di repo — tidak boleh dipakai lagi. */
 const KNOWN_WEAK_PASSWORDS = ['Admin@123456', 'Admin123', 'admin123', 'password'];
 
@@ -85,6 +89,11 @@ async function main() {
     },
   });
   console.log('✅ Admin created');
+
+  if (adminOnly) {
+    console.log('\n🎉 Seeding admin selesai (--admin-only: data demo dilewati).');
+    return;
+  }
 
   // Akun demo jamaah: password default 'Password123' HANYA untuk development.
   // Di production dibuat acak agar tidak ada kredensial publik di database.

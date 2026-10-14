@@ -1,10 +1,12 @@
 import multer from 'multer';
 import path from 'path';
 import crypto from 'crypto';
+import fs from 'fs/promises';
 import { UPLOADS_DIR, ensureUploadsDir, CLOUDINARY_PREFIX } from '../utils/fileStorage.js';
 import { hasCloudinaryCredentials } from '../utils/credentials.js';
-
-ensureUploadsDir().catch(() => {});
+import { validateFileSignature, extensionForType } from '../utils/magicBytes.js';
+import prisma from '../config/database.js';
+import ApiResponse from '../utils/apiResponse.js';
 
 /**
  * Mode penyimpanan berkas:
@@ -12,29 +14,32 @@ ensureUploadsDir().catch(() => {});
  *   Vercel — filesystem serverless read-only dan ephemeral).
  * - "disk"       : fallback pengembangan lokal (folder server/src/uploads).
  *
+ * ARSITEKTUR (diperbaiki — P0):
+ * Proses upload dipisah menjadi dua tahap yang BISA dipisah middleware:
+ *
+ *   1. parseUpload(field)   → multer (memory) + validasi MAGIC BYTES.
+ *      Tidak menyentuh Cloudinary/disk sama sekali.
+ *   2. <preflight/validasi> → otorisasi objek, cek kepemilikan, status,
+ *      validasi field multipart (type), dsb.
+ *   3. persistUpload()      → baru menyimpan ke Cloudinary (private) / disk.
+ *
+ * Sebelumnya `handleUpload()` menjalankan multer + Cloudinary SEBELUM
+ * controller memeriksa apakah user berhak mengupload ke deposit/dokumen
+ * tersebut — sehingga request tanpa otorisasi tetap membakar quota
+ * Cloudinary dan berpotensi membuat orphan asset. Sekarang Cloudinary
+ * hanya dipanggil setelah preflight lolos.
+ *
  * Nilai DB (proofImage / fileUrl) selalu `/uploads/<nama>.<ext>` sehingga
  * controller, DB, dan UI tidak perlu tahu di mana berkas fisik disimpan.
- * Nama berkas inilah yang dipetakan ke public_id Cloudinary (lihat
- * fileStorage.getStoredFile).
- *
- * CATATAN: nilai placeholder `.env.example` (`your_cloud_name` dll.) dianggap
- * TIDAK diset — kalau tidak, upload mencoba ke Cloudinary dengan kredensial
- * palsu dan gagal 500 ("Must supply api_key") padahal mode disk lokal tersedia.
  */
 export const isCloudinaryEnabled = hasCloudinaryCredentials();
 export const isDiskMode = !isCloudinaryEnabled;
 
 /**
- * Whitelist MIME -> ekstensi yang DIPAKSAKAN server.
- *
- * SEBELUMNYA ekstensi diambil dari `file.originalname` dan fileFilter hanya
- * memeriksa `file.mimetype` yang dikirim client. Akibatnya berkas bernama
- * `payload.js` / `payload.html` yang dikirim dengan MIME palsu (`image/png`)
- * tetap tersimpan dengan ekstensi aslinya, lalu disajikan `express.static`
- * sebagai script/HTML — celah stored XSS di origin API.
- *
- * Sekarang ekstensi selalu ditentukan server dari MIME yang lolos whitelist,
- * jadi tidak mungkin ada berkas .html/.js/.svg di folder upload.
+ * Whitelist MIME -> ekstensi yang DIPAKSAKAN server (pertahanan
+ * lapisan pertama). Validasi sesungguhnya terhadap isi berkas
+ * (magic bytes) dilakukan di `parseUpload` — MIME dari client
+ * tidak pernah dipercaya sepenuhnya.
  */
 export const MIME_EXTENSION = {
   'image/jpeg': 'jpg',
@@ -48,88 +53,187 @@ export const MIME_EXTENSION = {
 export const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 
 /**
- * Public id Cloudinary dibuat TANPA ekstensi dan memakai prefix bersama
- * `CLOUDINARY_PREFIX` (`tuu-`), sementara NAMA BERKAS tersimpan tidak memuat
- * prefix. Ekstensi dikirim terpisah pada waktu baca (format eksplisit).
+ * Multer SELALU memakai memoryStorage pada tahap parse. Berkas baru
+ * ditulis ke disk/Cloudinary pada `persistUpload()` — setelah
+ * otorisasi & validasi lolos. Ini mencegah orphan file di disk
+ * maupun di Cloudinary bila validasi/preflight gagal.
  */
-const diskStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-  filename: (req, file, cb) => {
-    const ext = MIME_EXTENSION[file.mimetype] || '';
-    // crypto.randomUUID() menggantikan Math.random() — tidak bisa ditebak/di-enumerasi.
-    cb(null, `${file.fieldname}-${crypto.randomUUID()}${ext ? `.${ext}` : ''}`);
-  },
-});
-
-const fileFilter = (req, file, cb) => {
-  if (Object.prototype.hasOwnProperty.call(MIME_EXTENSION, file.mimetype)) {
-    return cb(null, true);
-  }
-  const error = new Error('File type tidak diizinkan. Hanya JPG, PNG, PDF.');
-  error.status = 400;
-  return cb(error);
-};
-
-const multerOptions = {
-  fileFilter,
-  limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 }, // Max 2MB, satu berkas per request
-};
-
-// Cloudinary mode butuh buffer penuh (upload_stream); disk mode tulis langsung.
 const upload = multer({
-  ...multerOptions,
-  storage: isDiskMode ? diskStorage : multer.memoryStorage(),
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (Object.prototype.hasOwnProperty.call(MIME_EXTENSION, file.mimetype)) {
+      return cb(null, true);
+    }
+    const error = new Error('File type tidak diizinkan. Hanya JPG, PNG, PDF.');
+    error.status = 400;
+    return cb(error);
+  },
 });
 
 /**
- * Middleware lanjutan setelah multer: bila mode Cloudinary, unggah buffer ke
- * Cloudinary sebagai asset PRIVATE (`type: authenticated`) supaya berkas KTP,
- * paspor, dan bukti transfer tidak bisa diakses dari URL publik. Akses tetap
- * hanya lewat endpoint ber-otentikasi yang menyajikan berkas via signed URL.
+ * Tahap 1 — parse multipart ke memori + validasi magic bytes.
  *
- * Setelah selesai, req.file.filename diubah menjadi `<public-id>.<ext>` agar
- * bentuknya identik dengan mode disk — controller tidak perlu berubah.
+ * Magic bytes diverifikasi terhadap MIME deklarasi client:
+ * berkas HTML/JS yang dikirim dengan MIME `image/png` ditolak
+ * karena signature aslinya bukan JPEG/PNG/PDF.
+ *
+ * @param {string} fieldName nama field multipart
  */
-export const handleUpload = (fieldName) => [
+export const parseUpload = (fieldName) => [
   upload.single(fieldName),
-  async (req, res, next) => {
-    if (!req.file || isDiskMode) return next();
+  (req, res, next) => {
+    // Tanpa berkas → biarkan controller menangani "file wajib".
+    if (!req.file) return next();
 
-    try {
-      const { v2: cloudinary } = await import('cloudinary');
-      const ext = MIME_EXTENSION[req.file.mimetype] || '';
-      // Nama berkas tersimpan dibuat TANPA prefix. Prefix `tuu-` hanya
-      // ditambahkan saat membentuk public_id agar pemetaan nama↔public_id
-      // konsisten satu arah (lihat fileStorage.publicIdForStoredName).
-      const storedName = `${req.file.fieldname}-${crypto.randomUUID()}`;
-      const publicId = `${CLOUDINARY_PREFIX}${storedName}`;
-
-      await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          {
-            // PDF direkam sebagai resource image (format didukung Cloudinary).
-            resource_type: 'image',
-            type: 'authenticated', // privat — delivery butuh signed URL
-            public_id: publicId,
-            use_filename: false,
-            unique_filename: false,
-            overwrite: false,
-          },
-          (error, uploaded) => (error ? reject(error) : resolve(uploaded))
-        );
-        stream.end(req.file.buffer);
-      });
-
-      req.file.filename = `${storedName}${ext ? `.${ext}` : ''}`;
-      req.file.storage = 'cloudinary';
-      return next();
-    } catch (error) {
+    const result = validateFileSignature(req.file.buffer, req.file.mimetype);
+    if (!result.ok) {
+      const error = new Error(
+        result.reason === 'MIME_MISMATCH'
+          ? 'Tipe berkas tidak sesuai signature aslinya.'
+          : 'Format berkas tidak didukung. Hanya JPG, PNG, PDF.'
+      );
+      error.status = 400;
       return next(error);
     }
+
+    req.file.detectedType = result.detected;
+    return next();
   },
 ];
 
-// Backward-compatible export; routes memakai handleUpload('...').
+/**
+ * Tahap 3 — simpan berkas ke storage aktif.
+ *
+ * WAJIB dipanggil setelah parseUpload + seluruh preflight/validasi
+ * otorisasi lolos. Pada mode Cloudinary, asset diunggah sebagai
+ * PRIVATE (`type: authenticated`) — delivery hanya lewat signed URL
+ * berumur pendek (lihat fileStorage.getStoredFile).
+ *
+ * Menyuntukkan `req.file.filename` (`<field>-<uuid>.<ext>`),
+ * `req.file.storage`, dan (cloudinary) `req.file.publicId`.
+ */
+export const persistUpload = () => async (req, res, next) => {
+  if (!req.file) return next();
+
+  try {
+    const ext = extensionForType(req.file.detectedType) || '';
+    // crypto.randomUUID() menggantikan Math.random() — tidak bisa ditebak.
+    const storedName = `${req.file.fieldname}-${crypto.randomUUID()}`;
+
+    if (isDiskMode) {
+      await ensureUploadsDir();
+      const filename = `${storedName}${ext ? `.${ext}` : ''}`;
+      await fs.writeFile(path.join(UPLOADS_DIR, filename), req.file.buffer);
+      req.file.filename = filename;
+      req.file.storage = 'disk';
+      return next();
+    }
+
+    const { v2: cloudinary } = await import('cloudinary');
+    // Nama berkas tersimpan TANPA prefix. Prefix `tuu-` hanya ditambahkan
+    // saat membentuk public_id agar pemetaan nama↔public_id konsisten
+    // satu arah (lihat fileStorage.publicIdForStoredName).
+    const publicId = `${CLOUDINARY_PREFIX}${storedName}`;
+
+    await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'image',
+          type: 'authenticated', // privat — delivery butuh signed URL
+          public_id: publicId,
+          use_filename: false,
+          unique_filename: false,
+          overwrite: false,
+        },
+        (error, uploaded) => (error ? reject(error) : resolve(uploaded))
+      );
+      stream.end(req.file.buffer);
+    });
+
+    req.file.filename = `${storedName}${ext ? `.${ext}` : ''}`;
+    req.file.storage = 'cloudinary';
+    req.file.publicId = publicId;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * PREFLIGHT upload bukti transfer (P0 — tutup IDOR).
+ *
+ * Dijalankan setelah parseUpload (berkas ada di memori) tetapi
+ * SEBELUM persistUpload (Cloudinary). Memastikan:
+ *   - parameter ID valid;
+ *   - deposit ada dan dimiliki user yang login;
+ *   - status deposit masih PENDING.
+ *
+ * Bila lolos → next() ke persistUpload. Bila tidak → respons
+ * 404/409 dan Cloudinary TIDAK pernah dipanggil.
+ */
+export const preflightDepositProof = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!id || typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+      return ApiResponse.error(res, 'ID setoran tidak valid', 400);
+    }
+
+    const deposit = await prisma.deposit.findFirst({
+      where: {
+        id,
+        savingsPlan: { userId: req.user.id },
+      },
+      select: { id: true, status: true, proofImage: true },
+    });
+
+    if (!deposit) {
+      // Tidak membedakan "tidak ada" vs "milik user lain" — tidak bocorkan info.
+      return ApiResponse.error(res, 'Setoran tidak ditemukan', 404);
+    }
+
+    if (deposit.status !== 'PENDING') {
+      return ApiResponse.error(res, 'Setoran sudah diverifikasi — bukti tidak dapat diganti', 409);
+    }
+
+    // Simpan bukti lama (bila ada) untuk dibersihkan setelah update sukses.
+    req.preflight = { depositId: deposit.id, oldProofImage: deposit.proofImage };
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Hapus asset lama dari storage (best-effort) setelah bukti
+ * baru berhasil disimpan — mencegah orphan asset Cloudinary.
+ */
+export const cleanupOldProof = async (storedPath) => {
+  const name = String(storedPath || '').replace(/^\/uploads\//, '').split('/').pop();
+  if (!name) return;
+  try {
+    if (!isDiskMode) {
+      const { publicIdForStoredName } = await import('../utils/fileStorage.js');
+      const { v2: cloudinary } = await import('cloudinary');
+      const publicId = publicIdForStoredName(name);
+      if (publicId) {
+        await cloudinary.uploader.destroy(publicId, {
+          resource_type: 'image',
+          type: 'authenticated',
+          invalidate: true,
+        });
+      }
+      return;
+    }
+    await fs.unlink(path.join(UPLOADS_DIR, name)).catch(() => {});
+  } catch {
+    // best-effort — orphan akan dibersihkan cron cleanup
+  }
+};
+
+// Backward-compatible export; routes memakai parseUpload/persistUpload.
+export const handleUpload = (fieldName) => [...parseUpload(fieldName), ...persistUpload()];
+
 export const uploadSingle = (fieldName) => upload.single(fieldName);
 
 /**

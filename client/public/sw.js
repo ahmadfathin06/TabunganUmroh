@@ -11,7 +11,7 @@ self.addEventListener('push', (event) => {
   const title = payload.title || 'Tabunganku Umroh';
   const options = {
     body: payload.body || payload.message || '',
-    icon: '/icons/icon.svg',
+    icon: '/icons/logo.jpeg',
     badge: '/icons/icon.svg',
     tag: payload.tag || `notif-${payload.id || Date.now()}`,
     renotify: true,

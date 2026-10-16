@@ -4,17 +4,13 @@ import { GeometricPattern, MosqueSilhouette, StarMark } from '../landing/Ornamen
 import { EASE_OUT_EXPO } from '../../utils/animations';
 import { cn } from '../../utils/cn';
 
-/* Gold-accented Kaaba logo lockup */
+/* Brand logo and name */
 export function LogoLockup({ dark = false }) {
   return (
-    <Link to="/" className="inline-flex items-center gap-2.5">
-      <svg viewBox="0 0 64 64" className="h-9 w-9" aria-hidden="true">
-        <rect x="12" y="10" width="40" height="44" rx="4" fill="#0A3D2E" />
-        <rect x="12" y="19" width="40" height="4.5" fill="#D4A24C" />
-        <rect x="27" y="33" width="10" height="21" rx="1" fill="#D4A24C" />
-      </svg>
+    <Link to="/" aria-label="Tabungan Umroh Ku" className="inline-flex items-center gap-3">
+      <img src="/icons/logo.jpeg" alt="" className="h-16 w-16 object-contain" />
       <span className={cn('font-serif text-xl font-semibold tracking-tight', dark ? 'text-white' : 'text-ink')}>
-        Tabunganku <span className="text-gold-500">Umroh</span>
+        Tabungan <span className="text-gold-500">Umroh</span> Ku
       </span>
     </Link>
   );
@@ -91,7 +87,7 @@ export default function AuthShell({ title, subtitle, children, footer }) {
           </div>
 
           <p className="text-[11px] uppercase tracking-[0.3em] text-white/30">
-            Tabunganku Umroh — Sejak 2018
+            Tabungan Umroh Ku — Sejak 2018
           </p>
         </div>
       </div>

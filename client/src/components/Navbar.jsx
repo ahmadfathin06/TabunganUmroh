@@ -5,18 +5,14 @@ import { LogOut, LayoutDashboard, Shield, Menu, X } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { cn } from '../utils/cn';
 
-/* Kaaba mark matching the landing page ornaments */
+/* Full brand logo */
 function LogoMark({ compact = false }) {
   return (
-    <svg
-      viewBox="0 0 64 64"
-      className={cn('transition-all duration-500', compact ? 'h-7 w-7' : 'h-9 w-9')}
-      aria-hidden="true"
-    >
-      <rect x="12" y="10" width="40" height="44" rx="4" fill="#0A3D2E" />
-      <rect x="12" y="19" width="40" height="4.5" fill="#D4A24C" />
-      <rect x="27" y="33" width="10" height="21" rx="1" fill="#D4A24C" />
-    </svg>
+    <img
+      src="/icons/logo.jpeg"
+      alt=""
+      className={cn('object-contain transition-all duration-500', compact ? 'h-10 w-10' : 'h-12 w-12')}
+    />
   );
 }
 
@@ -97,7 +93,7 @@ export default function Navbar() {
       <div className="mx-auto max-w-6xl px-6">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5 py-1">
+          <Link to="/" aria-label="Tabungan Umroh Ku" className="flex items-center gap-2.5 py-1">
             <LogoMark compact={scrolled} />
             <span
               className={cn(
@@ -105,7 +101,7 @@ export default function Navbar() {
                 overHero ? 'text-white' : 'text-ink'
               )}
             >
-              Tabunganku <span className="text-gold-500">Umroh</span>
+              Tabungan <span className="text-gold-500">Umroh</span> Ku
             </span>
           </Link>
 

@@ -14,6 +14,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "node prisma/seed.js",
     "db:seed:admin": "node prisma/seed.js --admin-only",
+    "db:reset-admin": "node prisma/seed.js --reset-admin-password",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "lint": "node scripts/lint.mjs",

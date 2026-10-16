@@ -21,7 +21,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 // `npm run db:seed:admin` (atau `node prisma/seed.js --admin-only`) hanya membuat
 // akun admin, tanpa menyentuh data demo (user jamaah, bank, paket, setoran).
-const adminOnly = process.argv.includes('--admin-only');
+const resetAdminPassword = process.argv.includes('--reset-admin-password');
+const adminOnly = process.argv.includes('--admin-only') || resetAdminPassword;
 
 /** Password yang pernah tertulis di repo — tidak boleh dipakai lagi. */
 const KNOWN_WEAK_PASSWORDS = ['Admin@123456', 'Admin123', 'admin123', 'password'];
@@ -33,8 +34,12 @@ const KNOWN_WEAK_PASSWORDS = ['Admin@123456', 'Admin123', 'admin123', 'password'
  * sehingga siapa pun yang bisa membaca source bisa login sebagai super admin
  * selama password itu belum diganti.
  */
-const resolveAdminPassword = () => {
+const resolveAdminPassword = ({ required = false } = {}) => {
   const fromEnv = (process.env.ADMIN_PASSWORD || '').trim();
+
+  if (required && fromEnv.length < 12) {
+    throw new Error('ADMIN_PASSWORD wajib diset (minimal 12 karakter) untuk reset password admin.');
+  }
 
   if (fromEnv.length >= 12) {
     if (KNOWN_WEAK_PASSWORDS.includes(fromEnv)) {
@@ -73,10 +78,10 @@ async function main() {
   console.log('🌱 Seeding database...');
 
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@tabunganku.com';
-  const adminPassword = await bcrypt.hash(resolveAdminPassword(), 12);
+  const adminPassword = await bcrypt.hash(resolveAdminPassword({ required: resetAdminPassword }), 12);
   await prisma.user.upsert({
     where: { email: adminEmail },
-    update: {},
+    update: resetAdminPassword ? { password: adminPassword } : {},
     create: {
       name: 'Super Admin',
       email: adminEmail,

@@ -166,6 +166,9 @@ npm run db:seed --prefix server
 
 # (opsional) hanya akun admin — tanpa data demo
 npm run db:seed:admin --prefix server
+
+# reset password admin yang sudah ada (atur ADMIN_EMAIL dan ADMIN_PASSWORD di server/.env)
+npm run db:reset-admin --prefix server
 ```
 
 **Seed admin:** `ADMIN_PASSWORD` minimal 12 karakter. Bila dikosongkan saat
@@ -184,6 +187,10 @@ Akun hasil seed (development):
 `npm run db:seed:admin` memakai `ADMIN_EMAIL`/`ADMIN_PASSWORD` yang sama namun
 melewati user demo, bank, paket umroh, dan setoran — berguna bila database sudah
 berisi data asli.
+
+`npm run db:reset-admin --prefix server` hanya mengganti password akun admin
+yang emailnya cocok dengan `ADMIN_EMAIL` (minimal 12 karakter) dan tidak menyentuh
+data lain.
 
 ---
 

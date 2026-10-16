@@ -113,52 +113,54 @@ export const parseUpload = (fieldName) => [
  * Menyuntukkan `req.file.filename` (`<field>-<uuid>.<ext>`),
  * `req.file.storage`, dan (cloudinary) `req.file.publicId`.
  */
-export const persistUpload = () => async (req, res, next) => {
-  if (!req.file) return next();
+export const persistUpload = () => [
+  async (req, res, next) => {
+    if (!req.file) return next();
 
-  try {
-    const ext = extensionForType(req.file.detectedType) || '';
-    // crypto.randomUUID() menggantikan Math.random() — tidak bisa ditebak.
-    const storedName = `${req.file.fieldname}-${crypto.randomUUID()}`;
+    try {
+      const ext = extensionForType(req.file.detectedType) || '';
+      // crypto.randomUUID() menggantikan Math.random() — tidak bisa ditebak.
+      const storedName = `${req.file.fieldname}-${crypto.randomUUID()}`;
 
-    if (isDiskMode) {
-      await ensureUploadsDir();
-      const filename = `${storedName}${ext ? `.${ext}` : ''}`;
-      await fs.writeFile(path.join(UPLOADS_DIR, filename), req.file.buffer);
-      req.file.filename = filename;
-      req.file.storage = 'disk';
+      if (isDiskMode) {
+        await ensureUploadsDir();
+        const filename = `${storedName}${ext ? `.${ext}` : ''}`;
+        await fs.writeFile(path.join(UPLOADS_DIR, filename), req.file.buffer);
+        req.file.filename = filename;
+        req.file.storage = 'disk';
+        return next();
+      }
+
+      const { v2: cloudinary } = await import('cloudinary');
+      // Nama berkas tersimpan TANPA prefix. Prefix `tuu-` hanya ditambahkan
+      // saat membentuk public_id agar pemetaan nama↔public_id konsisten
+      // satu arah (lihat fileStorage.publicIdForStoredName).
+      const publicId = `${CLOUDINARY_PREFIX}${storedName}`;
+
+      await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            resource_type: 'image',
+            type: 'authenticated', // privat — delivery butuh signed URL
+            public_id: publicId,
+            use_filename: false,
+            unique_filename: false,
+            overwrite: false,
+          },
+          (error, uploaded) => (error ? reject(error) : resolve(uploaded))
+        );
+        stream.end(req.file.buffer);
+      });
+
+      req.file.filename = `${storedName}${ext ? `.${ext}` : ''}`;
+      req.file.storage = 'cloudinary';
+      req.file.publicId = publicId;
       return next();
+    } catch (error) {
+      return next(error);
     }
-
-    const { v2: cloudinary } = await import('cloudinary');
-    // Nama berkas tersimpan TANPA prefix. Prefix `tuu-` hanya ditambahkan
-    // saat membentuk public_id agar pemetaan nama↔public_id konsisten
-    // satu arah (lihat fileStorage.publicIdForStoredName).
-    const publicId = `${CLOUDINARY_PREFIX}${storedName}`;
-
-    await new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          resource_type: 'image',
-          type: 'authenticated', // privat — delivery butuh signed URL
-          public_id: publicId,
-          use_filename: false,
-          unique_filename: false,
-          overwrite: false,
-        },
-        (error, uploaded) => (error ? reject(error) : resolve(uploaded))
-      );
-      stream.end(req.file.buffer);
-    });
-
-    req.file.filename = `${storedName}${ext ? `.${ext}` : ''}`;
-    req.file.storage = 'cloudinary';
-    req.file.publicId = publicId;
-    return next();
-  } catch (error) {
-    return next(error);
-  }
-};
+  },
+];
 
 /**
  * PREFLIGHT upload bukti transfer (P0 — tutup IDOR).

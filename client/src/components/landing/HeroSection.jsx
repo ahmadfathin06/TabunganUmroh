@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useMotionValue, useSpring, useTransform } from 'motion/react';
-import { ArrowRight, BadgeCheck, Landmark, Star, Wallet } from 'lucide-react';
+import { ArrowRight, BadgeCheck } from 'lucide-react';
 import AnimatedNumber from './AnimatedNumber';
-import { GeometricPattern, KaabaIcon, MosqueSilhouette } from './Ornament';
+import { GeometricPattern, MosqueSilhouette } from './Ornament';
 import { EASE_OUT_EXPO, SPRING_SOFT } from '../../utils/animations';
 
 /* ---------------- Golden drifting particles (dzikir beads) ---------------- */
@@ -113,11 +113,6 @@ function ProgressPreviewCard() {
     my.set(0);
   };
 
-  const deps = [
-    { name: 'Hotel Makkah', stars: 5, dist: '150 m' },
-    { name: 'Hotel Madinah', stars: 4, dist: '300 m' },
-  ];
-
   return (
     <motion.div
       onMouseMove={onMove}
@@ -127,11 +122,16 @@ function ProgressPreviewCard() {
     >
       <motion.div
         style={{ rotateX: rx, rotateY: ry, transformStyle: 'preserve-3d' }}
-        className="relative rounded-3xl border border-white/15 bg-gradient-to-b from-white/15 to-white/5 p-6 shadow-deep backdrop-blur-2xl md:p-7"
+        className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-white/15 bg-night shadow-deep"
       >
-        {/* sheen that follows the pointer */}
+        <img
+          src="/three-holy-mosques-at-dawn.png"
+          alt="Ka'bah dan Masjid Nabawi saat fajar"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-emerald-950 via-emerald-950/75 via-40% to-transparent" />
         <motion.span
-          className="pointer-events-none absolute inset-0 rounded-3xl"
+          className="pointer-events-none absolute inset-0"
           style={{
             background: useTransform(
               glowX,
@@ -139,65 +139,10 @@ function ProgressPreviewCard() {
             ),
           }}
         />
-        <div style={{ transform: 'translateZ(40px)' }}>
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-gold-300">Target Saya</p>
-              <p className="mt-1 font-serif text-xl text-white">Paket Reguler 9 Hari</p>
-            </div>
-            <KaabaIcon className="h-11 w-11 drop-shadow-[0_0_18px_rgba(212,162,76,0.45)]" />
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-white/10 bg-night/40 p-4">
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-widest text-white/50">Terkumpul</p>
-                <p className="font-grotesk text-2xl font-bold text-white">
-                  Rp <AnimatedNumber value={21.4} decimals={1} /> jt
-                </p>
-              </div>
-              <span className="rounded-full bg-gold-500/15 px-2.5 py-1 text-xs font-bold text-gold-300">54%</span>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-gold-600 via-gold-400 to-gold-300"
-                initial={{ width: '0%' }}
-                animate={{ width: '54%' }}
-                transition={{ duration: 1.8, delay: 0.5, ease: EASE_OUT_EXPO }}
-              />
-            </div>
-            <div className="mt-2 flex justify-between text-[11px] text-white/45">
-              <span>Rp 21,4 jt terhimpun</span>
-              <span>Target Rp 39,5 jt</span>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            {deps.map((d) => (
-              <div key={d.name} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs font-semibold text-white/85">{d.name}</p>
-                <div className="mt-1 flex items-center gap-0.5">
-                  {Array.from({ length: d.stars }).map((_, i) => (
-                    <Star key={i} className="h-3 w-3 fill-gold-400 text-gold-400" />
-                  ))}
-                </div>
-                <p className="mt-1 text-[11px] text-white/50">{d.dist} dari Masjid</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-gold-500/25 bg-gold-500/10 px-3.5 py-2.5">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gold-500/20">
-                <Wallet className="h-4 w-4 text-gold-300" />
-              </span>
-              <div>
-                <p className="text-xs font-semibold text-white">Setoran diterima</p>
-                <p className="text-[11px] text-white/55">Transfer BCA · hari ini</p>
-              </div>
-            </div>
-            <p className="font-grotesk text-sm font-bold text-gold-300">+Rp 1.000.000</p>
-          </div>
+        <div className="absolute inset-x-0 bottom-0 p-6 md:p-7" style={{ transform: 'translateZ(40px)' }}>
+          <p className="max-w-xs font-serif text-3xl leading-tight text-white md:text-4xl">
+            Langkah mudah menuju tanah suci
+          </p>
         </div>
       </motion.div>
 

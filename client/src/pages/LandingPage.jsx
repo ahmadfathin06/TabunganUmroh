@@ -153,7 +153,7 @@ export default function LandingPage() {
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.3em] text-gold-600">Simpanan Aman & Tanpa Riba</p>
               <h3 className="mt-3 max-w-md font-serif text-2xl leading-snug text-ink md:text-3xl">
-                Mulai dari Rp 100 ribu, insya Allah sampai ke Baitullah.
+                Mulai dari Rp 25 ribu, insya Allah sampai ke Baitullah.
               </h3>
             </div>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="shrink-0">
@@ -187,7 +187,7 @@ export default function LandingPage() {
       >
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-white">Mulai dari Rp 100rb/bulan</p>
+            <p className="truncate text-xs font-semibold text-white">Mulai dari Rp 25rb/bulan</p>
             <p className="truncate text-[10px] text-white/55">Gratis biaya administrasi</p>
           </div>
           <Link

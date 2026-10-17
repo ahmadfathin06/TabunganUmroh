@@ -30,7 +30,7 @@ export default function DashboardHeader({ name, refreshing }) {
         className="relative mx-auto max-w-6xl px-5 pb-24 pt-24 md:px-8 md:pb-28 md:pt-28"
       >
         <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-gold-300">
-          Tabungan Umroh
+          Tabungan UmrohKu
         </p>
 
         <div className="mt-5 flex items-center gap-4 md:mt-6">

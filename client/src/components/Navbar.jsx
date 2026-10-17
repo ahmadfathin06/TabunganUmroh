@@ -9,7 +9,7 @@ import { cn } from '../utils/cn';
 function LogoMark({ compact = false }) {
   return (
     <img
-      src="/icons/logo.jpeg"
+      src="/icons/logo.png"
       alt=""
       className={cn('object-contain transition-all duration-500', compact ? 'h-10 w-10' : 'h-12 w-12')}
     />
@@ -93,7 +93,7 @@ export default function Navbar() {
       <div className="mx-auto max-w-6xl px-6">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" aria-label="Tabungan Umroh Ku" className="flex items-center gap-2.5 py-1">
+          <Link to="/" aria-label="Tabungan UmrohKu" className="flex items-center gap-2.5 py-1">
             <LogoMark compact={scrolled} />
             <span
               className={cn(
@@ -101,7 +101,7 @@ export default function Navbar() {
                 overHero ? 'text-white' : 'text-ink'
               )}
             >
-              Tabungan <span className="text-gold-500">Umroh</span> Ku
+              Tabungan <span className="text-gold-500">UmrohKu</span>
             </span>
           </Link>
 

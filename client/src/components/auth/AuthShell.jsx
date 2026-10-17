@@ -7,10 +7,10 @@ import { cn } from '../../utils/cn';
 /* Brand logo and name */
 export function LogoLockup({ dark = false }) {
   return (
-    <Link to="/" aria-label="Tabungan Umroh Ku" className="inline-flex items-center gap-3">
-      <img src="/icons/logo.jpeg" alt="" className="h-16 w-16 object-contain" />
+    <Link to="/" aria-label="Tabungan UmrohKu" className="inline-flex items-center gap-3">
+      <img src="/icons/logo.png" alt="" className="h-16 w-16 object-contain" />
       <span className={cn('font-serif text-xl font-semibold tracking-tight', dark ? 'text-white' : 'text-ink')}>
-        Tabungan <span className="text-gold-500">Umroh</span> Ku
+        Tabungan <span className="text-gold-500">UmrohKu</span>
       </span>
     </Link>
   );
@@ -87,7 +87,7 @@ export default function AuthShell({ title, subtitle, children, footer }) {
           </div>
 
           <p className="text-[11px] uppercase tracking-[0.3em] text-white/30">
-            Tabungan Umroh Ku — Sejak 2018
+            Tabungan UmrohKu — Sejak 2018
           </p>
         </div>
       </div>

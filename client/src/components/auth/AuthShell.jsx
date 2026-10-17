@@ -59,7 +59,7 @@ export default function AuthShell({ title, subtitle, children, footer }) {
               transition={{ duration: 0.9, delay: 0.35, ease: EASE_OUT_EXPO }}
               className="mt-6 max-w-md font-serif text-4xl leading-[1.15] text-white"
             >
-              Sekali menabung, <span className="italic text-gold-300">selamanya berubah.</span>
+              Langkah mudah <span className="italic text-gold-300">menuju tanah suci.</span>
             </motion.h2>
             <motion.p
               initial={{ opacity: 0, y: 30 }}

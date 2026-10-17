@@ -34,4 +34,4 @@ export const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Tunai (Kantor)' },
 ];
 
-export const QUICK_AMOUNTS = [100000, 250000, 500000, 1000000, 2000000];
+export const QUICK_AMOUNTS = [25000, 100000, 250000, 500000, 1000000, 2000000];

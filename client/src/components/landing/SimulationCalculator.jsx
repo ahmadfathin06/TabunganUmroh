@@ -93,13 +93,13 @@ export default function SimulationCalculator() {
             />
             <Slider
               label="Tabungan per Bulan"
-              min={100000}
+              min={25000}
               max={5000000}
-              step={50000}
+              step={25000}
               value={monthly}
               onChange={setMonthly}
               format={formatCurrency}
-              minLabel="Rp 100 rb"
+              minLabel="Rp 25 rb"
               maxLabel="Rp 5 jt"
             />
 

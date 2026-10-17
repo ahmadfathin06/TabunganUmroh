@@ -10,7 +10,7 @@ import { cn } from '../../utils/cn';
 const FAQS = [
   {
     q: 'Berapa minimal setoran tabungan umroh?',
-    a: 'Minimal setoran Rp 100.000 per transaksi. Anda bebas menentukan nominal dan frekuensinya — mingguan, bulanan, atau kapan pun ada rezeki berlebih.',
+    a: 'Minimal setoran Rp 25.000 per transaksi. Anda bebas menentukan nominal dan frekuensinya — mingguan, bulanan, atau kapan pun ada rezeki berlebih.',
   },
   {
     q: 'Apakah ada biaya administrasi atau bunga?',

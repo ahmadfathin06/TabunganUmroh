@@ -31,15 +31,11 @@ export default function CreatePlanModal({ packages, onClose, onSuccess }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!targetAmount || Number(targetAmount) <= 0) {
-      toast.error('Isi target tabungan terlebih dahulu');
-      return;
-    }
     setSubmitting(true);
     try {
       await api.post('/savings', {
         packageId: packageId || undefined,
-        targetAmount: Number(targetAmount),
+        targetAmount: targetAmount === '' ? null : Number(targetAmount),
         jamaahName: jamaahName || undefined,
         jamaahRelation,
         monthlyTarget: monthlyTarget ? Number(monthlyTarget) : undefined,
@@ -95,7 +91,7 @@ export default function CreatePlanModal({ packages, onClose, onSuccess }) {
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="depTarget">
-                Target Tabungan (Rp)
+                Target Tabungan (Rp, opsional)
               </label>
               <input
                 id="depTarget"
@@ -106,10 +102,9 @@ export default function CreatePlanModal({ packages, onClose, onSuccess }) {
                 value={targetAmount}
                 onChange={(e) => setTargetAmount(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                required
               />
               <p className="mt-1 text-xs text-slate-400">
-                Bebas diisi dan bisa diubah kapan saja. Terisi otomatis saat memilih patokan paket.
+                Boleh dikosongkan bila belum tahu targetnya. Terisi otomatis saat memilih patokan paket.
               </p>
             </div>
 

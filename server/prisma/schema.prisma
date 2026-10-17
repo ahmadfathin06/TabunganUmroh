@@ -155,7 +155,8 @@ model SavingsPlan {
   packageId         String?      @map("package_id")
   jamaahName        String       @map("jamaah_name")
   jamaahRelation    String?      @map("jamaah_relation")
-  targetAmount      Decimal      @db.Decimal(15, 2) @map("target_amount")
+  // Boleh null: user yang belum tahu target dapat mengosongkan / mengisi nanti.
+  targetAmount      Decimal?     @db.Decimal(15, 2) @map("target_amount")
   currentBalance    Decimal      @default(0) @db.Decimal(15, 2) @map("current_balance")
   status            SavingStatus @default(ACTIVE)
   monthlyTarget     Decimal?     @db.Decimal(15, 2) @map("monthly_target")

@@ -132,7 +132,8 @@ export default function DepositModal({ plans, bankAccounts, presetPlanId, onClos
                 >
                   {plans.filter((p) => p.status === 'ACTIVE').map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.package?.name || p.jamaahName} - sisa {formatCurrency(p.remaining)}
+                      {p.package?.name || p.jamaahName}
+                      {p.remaining != null ? ` - sisa ${formatCurrency(p.remaining)}` : ' - tanpa target'}
                     </option>
                   ))}
                 </select>
@@ -140,8 +141,10 @@ export default function DepositModal({ plans, bankAccounts, presetPlanId, onClos
 
               {selectedPlan && (
                 <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-sm">
-                  <span className="text-slate-500">Sisa target paket ini</span>
-                  <span className="font-bold text-slate-900">{formatCurrency(selectedPlan.remaining)}</span>
+                  <span className="text-slate-500">Sisa target</span>
+                  <span className="font-bold text-slate-900">
+                    {selectedPlan.remaining != null ? formatCurrency(selectedPlan.remaining) : 'Belum ditentukan'}
+                  </span>
                 </div>
               )}
 

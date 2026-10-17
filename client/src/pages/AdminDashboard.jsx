@@ -413,7 +413,9 @@ function PlansPanel({ plans }) {
                   <td className="px-5 py-3.5 text-slate-600">{p.package?.name || '-'}</td>
                   <td className="px-5 py-3.5 font-semibold text-slate-900 whitespace-nowrap">
                     {formatCurrency(balance)}
-                    <span className="block text-xs text-slate-400 font-normal">target {formatCurrency(target)}</span>
+                    <span className="block text-xs text-slate-400 font-normal">
+                      {target > 0 ? `target ${formatCurrency(target)}` : 'target belum ditentukan'}
+                    </span>
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2">

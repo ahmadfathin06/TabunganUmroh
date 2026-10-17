@@ -15,11 +15,12 @@ const savingsController = {
         if (!pkg) return ApiResponse.error(res, 'Paket tidak ditemukan', 404);
       }
 
-      // Target bebas dari user; kalau kosong, harga paket jadi patokan.
-      const target = targetAmount != null ? Number(targetAmount) : pkg ? Number(pkg.price) : null;
-      if (!target || target <= 0) {
-        return ApiResponse.error(res, 'Target tabungan wajib diisi', 400);
-      }
+      // Target BOLEH kosong (user mungkin belum tahu):
+      // - targetAmount === undefined (tidak dikirim) + ada paket → harga paket;
+      // - targetAmount === null (dikosongkan eksplisit) → tanpa target;
+      // - angka → pakai angka itu.
+      const target =
+        targetAmount === undefined ? (pkg ? Number(pkg.price) : null) : targetAmount ?? null;
 
       /**
        * TIDAK ada klaim kuota di sini: menabung = menabung, bukan memesan
@@ -32,7 +33,7 @@ const savingsController = {
           packageId: pkg ? pkg.id : null,
           jamaahName: jamaahName || req.user.name,
           jamaahRelation: jamaahRelation || 'self',
-          targetAmount: Number(target).toFixed(2),
+          targetAmount: target != null ? Number(target).toFixed(2) : null,
           monthlyTarget: monthlyTarget ? Number(monthlyTarget).toFixed(2) : null,
         },
         include: { package: true },
@@ -95,20 +96,18 @@ const savingsController = {
           },
         },
         orderBy: { createdAt: 'desc' },
+      });      const formatted = plans.map((plan) => {
+        const target = plan.targetAmount != null ? parseFloat(plan.targetAmount) : null;
+        const balance = parseFloat(plan.currentBalance);
+        return {
+          ...plan,
+          targetAmount: target,
+          currentBalance: balance,
+          // Tanpa target → tanpa progres; kartu menampilkan "belum ditentukan".
+          progress: target ? Math.min(Math.round((balance / target) * 100), 100) : 0,
+          remaining: target ? Math.max(target - balance, 0) : null,
+        };
       });
-
-      const formatted = plans.map((plan) => ({
-        ...plan,
-        targetAmount: parseFloat(plan.targetAmount),
-        currentBalance: parseFloat(plan.currentBalance),
-        progress: Math.min(
-          Math.round((parseFloat(plan.currentBalance) / parseFloat(plan.targetAmount)) * 100),
-          100
-        ),
-        remaining: Math.max(
-          parseFloat(plan.targetAmount) - parseFloat(plan.currentBalance), 0
-        ),
-      }));
 
       return ApiResponse.success(res, formatted);
     } catch (error) {

@@ -78,20 +78,42 @@ test('POST /savings dengan packageId → paket hanya patokan harga, kuota TIDAK 
   assert.ok(planWithPackageId);
 });
 
-test('POST /savings tanpa target dan tanpa paket → 400, plan tidak dibuat', async () => {
-  const beforeCount = await prisma.savingsPlan.count({ where: { userId: user.id } });
+test('POST /savings target dikosongkan eksplisit (null) → tetap tanpa target walau pilih paket', async () => {
+  const res = await ctx.request('/api/savings', {
+    method: 'POST',
+    token: user.accessToken,
+    body: { packageId: pkg.id, targetAmount: null },
+  });
 
+  assert.equal(res.status, 201, res.text);
+  assert.equal(res.body.data.packageId, pkg.id);
+  assert.equal(res.body.data.targetAmount, null);
+});
+
+test('POST /savings tanpa target dan tanpa paket → 201, target masih null (belum tahu)', async () => {
   const res = await ctx.request('/api/savings', {
     method: 'POST',
     token: user.accessToken,
     body: {},
   });
 
-  assert.equal(res.status, 400);
-  assert.match(res.text, /Target tabungan wajib diisi/);
+  assert.equal(res.status, 201, res.text);
+  assert.equal(res.body.data.packageId, null);
+  assert.equal(res.body.data.targetAmount, null);
 
-  const afterCount = await prisma.savingsPlan.count({ where: { userId: user.id } });
-  assert.equal(afterCount, beforeCount);
+  // Progress/remaining aman saat target null (tidak NaN, tidak auto-lunas).
+  const mine = await ctx.request('/api/savings/my', { token: user.accessToken });
+  const created = mine.body.data.find((p) => p.id === res.body.data.id);
+  assert.equal(created.progress, 0);
+  assert.equal(created.remaining, null);
+
+  // Bereskan langsung supaya tidak menumpuk (saldo 0 → boleh dibatalkan).
+  const cancel = await ctx.request(`/api/savings/${res.body.data.id}/cancel`, {
+    method: 'PUT',
+    token: user.accessToken,
+    body: {},
+  });
+  assert.equal(cancel.status, 200, cancel.text);
 });
 
 test('POST /savings dengan packageId fiktif → 404, tidak ada plan yatim', async () => {

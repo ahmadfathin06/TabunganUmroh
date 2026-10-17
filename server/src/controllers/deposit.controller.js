@@ -413,10 +413,11 @@ const approveInTransaction = (deposit, adminId) =>
     });
 
     const newBalance = Number(updatedSavings.currentBalance);
-    const target = Number(updatedSavings.targetAmount);
+    // Tanpa target (null) → tidak ada auto-lunas; Number(null) = 0 harus dijaga.
+    const target = updatedSavings.targetAmount != null ? Number(updatedSavings.targetAmount) : 0;
     let isLunas = false;
 
-    if (newBalance >= target) {
+    if (target > 0 && newBalance >= target) {
       await tx.savingsPlan.update({
         where: { id: deposit.savingsPlanId },
         data: { status: 'PAID_OFF', paidOffAt: new Date() },

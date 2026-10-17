@@ -100,15 +100,23 @@ export default function TargetProgressCard({ progress, currentBalance, targetAmo
             </div>
 
             <div className="mt-2.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] sm:justify-between md:text-xs">
-              <span className="text-sage">
-                Progress:{' '}
-                <b className="font-grotesk text-ink/80">
-                  {formatCurrencyShort(currentBalance)} / {formatCurrencyShort(targetAmount)}
-                </b>
-              </span>
-              <span className="text-sage">
-                Sisa Target: <b className="font-grotesk text-forest">{formatCurrencyIDR(remaining)}</b>
-              </span>
+              {Number(targetAmount) > 0 ? (
+                <>
+                  <span className="text-sage">
+                    Progress:{' '}
+                    <b className="font-grotesk text-ink/80">
+                      {formatCurrencyShort(currentBalance)} / {formatCurrencyShort(targetAmount)}
+                    </b>
+                  </span>
+                  <span className="text-sage">
+                    Sisa Target: <b className="font-grotesk text-forest">{formatCurrencyIDR(remaining)}</b>
+                  </span>
+                </>
+              ) : (
+                <span className="text-sage">
+                  Terkumpul: <b className="font-grotesk text-ink/80">{formatCurrencyShort(currentBalance)}</b> · target belum ditentukan
+                </span>
+              )}
             </div>
           </>
         ) : (

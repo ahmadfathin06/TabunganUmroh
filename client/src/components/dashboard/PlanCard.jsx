@@ -63,7 +63,7 @@ export default function PlanCard({ plan, index = 0, confirmCancelId, onCancelCli
           </div>
           <div className="text-right">
             <p className="text-[10px] font-bold uppercase tracking-widest text-sage">Target</p>
-            <p className="font-grotesk text-sm font-semibold text-forest">{formatCurrency(plan.targetAmount)}</p>
+            <p className="font-grotesk text-sm font-semibold text-forest">{plan.targetAmount ? formatCurrency(plan.targetAmount) : 'Belum ditentukan'}</p>
           </div>
         </div>
 
@@ -78,7 +78,7 @@ export default function PlanCard({ plan, index = 0, confirmCancelId, onCancelCli
         </div>
         <div className="mt-2 flex items-center justify-between text-xs">
           <span className="font-grotesk font-bold text-forest">{pct}%</span>
-          <span className="text-sage">Sisa {formatCurrency(plan.remaining)}</span>
+          <span className="text-sage">{plan.remaining != null ? `Sisa ${formatCurrency(plan.remaining)}` : 'Tanpa target'}</span>
         </div>
 
         {Number(plan.monthlyTarget) > 0 && (

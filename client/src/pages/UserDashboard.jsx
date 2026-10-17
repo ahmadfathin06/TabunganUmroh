@@ -167,7 +167,7 @@ export default function UserDashboard() {
             progress={stats.progress}
             currentBalance={stats.totalBalance}
             targetAmount={stats.totalTarget}
-            remaining={Math.max(stats.totalTarget - stats.totalBalance, 0)}
+            remaining={stats.totalTarget > 0 ? Math.max(stats.totalTarget - stats.totalBalance, 0) : null}
             plan={primaryPlan}
           />
         </div>

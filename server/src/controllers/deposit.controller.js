@@ -422,14 +422,16 @@ const approveInTransaction = (deposit, adminId) =>
         data: { status: 'PAID_OFF', paidOffAt: new Date() },
       });
       isLunas = true;
-    }
-
-    const notification = await tx.notification.create({
-      data: {
-        userId: deposit.savingsPlan.user.id,
-        title: isLunas ? 'Tabungan LUNAS! 🎉' : 'Setoran Diverifikasi ✅',
-        message: isLunas
-          ? `Alhamdulillah! Tabungan untuk paket "${deposit.savingsPlan.package.name}" sudah LUNAS.`
+    }        // Plan boleh tanpa paket (paket hanya patokan harga) → fallback ke nama jamaah.
+        const lunasLabel = deposit.savingsPlan.package
+          ? `Tabungan untuk paket "${deposit.savingsPlan.package.name}"`
+          : `Tabungan "${deposit.savingsPlan.jamaahName}"`;
+        const notification = await tx.notification.create({
+          data: {
+            userId: deposit.savingsPlan.user.id,
+            title: isLunas ? 'Tabungan LUNAS! 🎉' : 'Setoran Diverifikasi ✅',
+            message: isLunas
+              ? `Alhamdulillah! ${lunasLabel} sudah LUNAS.`
           : `Setoran Rp ${Number(deposit.amount).toLocaleString('id-ID')} telah berhasil dikonfirmasi.`,
         type: isLunas ? 'PAID_OFF' : 'DEPOSIT_APPROVED',
       },

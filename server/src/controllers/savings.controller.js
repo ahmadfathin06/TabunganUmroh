@@ -5,69 +5,41 @@ const savingsController = {
   create: async (req, res) => {
     try {
       // Selalu pakai hasil validasi zod, bukan body mentah (mass assignment).
-      const { packageId, jamaahName, jamaahRelation, monthlyTarget } = req.validatedData;
+      const { packageId, targetAmount, jamaahName, jamaahRelation, monthlyTarget } = req.validatedData;
 
-      const pkg = await prisma.umrohPackage.findUnique({ where: { id: packageId } });
-      if (!pkg) return ApiResponse.error(res, 'Paket tidak ditemukan', 404);
-      if (pkg.status !== 'OPEN') return ApiResponse.error(res, 'Paket sudah ditutup', 400);
+      // Paket hanya PATOKAN HARGA: tidak wajib, tidak memesan kuota, dan tidak
+      // mengikat rencana — plan boleh dibuat tanpa paket sama sekali.
+      let pkg = null;
+      if (packageId) {
+        pkg = await prisma.umrohPackage.findUnique({ where: { id: packageId } });
+        if (!pkg) return ApiResponse.error(res, 'Paket tidak ditemukan', 404);
+      }
 
-      const existingPlan = await prisma.savingsPlan.findFirst({
-        where: { userId: req.user.id, packageId, status: 'ACTIVE' },
-      });
-      if (existingPlan) return ApiResponse.error(res, 'Anda sudah menabung di paket ini', 409);
+      // Target bebas dari user; kalau kosong, harga paket jadi patokan.
+      const target = targetAmount != null ? Number(targetAmount) : pkg ? Number(pkg.price) : null;
+      if (!target || target <= 0) {
+        return ApiResponse.error(res, 'Target tabungan wajib diisi', 400);
+      }
 
       /**
-       * Kuota DIAMANKAN LEBIH DULU dengan DECREMENT ATOMIK
-       * di dalam transaction yang sama dengan pembuatan plan.
-       *
-       * SEBELUMNYA: baca `quotaRemaining` lalu decrement tanpa
-       * syarat → TOCTOU. N request paralel sama-sama lolos
-       * pengecekan `<= 0` dan semuanya membuat plan → kuota
-       * oversell / negatif.
-       *
-       * SEKARANG: `updateMany` dengan syarat `quotaRemaining > 0`
-       * di dalam transaction. Hanya request yang benar-benar
-       * mengubah 1 row (count = 1) yang lanjut membuat plan.
-       * Bila count = 0 → paket penuh (rollback otomatis).
-       * Bila pembuatan plan gagal (mis. duplikat) → transaction
-       * rollback → kuota dikembalikan. Kuota TIDAK PERNAH
-       * negatif dan TIDAK pernah bocor.
+       * TIDAK ada klaim kuota di sini: menabung = menabung, bukan memesan
+       * kursi. Kuota keberangkatan diatur admin (paket murni patokan harga),
+       * sehingga plan bisa berdiri sendiri tanpa paket dan tanpa rollback.
        */
-      const plan = await prisma.$transaction(async (tx) => {
-        const claimed = await tx.umrohPackage.updateMany({
-          where: { id: packageId, status: 'OPEN', quotaRemaining: { gt: 0 } },
-          data: { quotaRemaining: { decrement: 1 } },
-        });
-        if (claimed.count === 0) {
-          const error = new Error('Kuota paket sudah penuh');
-          error.code = 'QUOTA_FULL';
-          throw error;
-        }
-
-        return tx.savingsPlan.create({
-          data: {
-            userId: req.user.id,
-            packageId,
-            jamaahName: jamaahName || req.user.name,
-            jamaahRelation: jamaahRelation || 'self',
-            targetAmount: pkg.price,
-            monthlyTarget: monthlyTarget ? Number(monthlyTarget).toFixed(2) : null,
-          },
-          include: { package: true },
-        });
+      const plan = await prisma.savingsPlan.create({
+        data: {
+          userId: req.user.id,
+          packageId: pkg ? pkg.id : null,
+          jamaahName: jamaahName || req.user.name,
+          jamaahRelation: jamaahRelation || 'self',
+          targetAmount: Number(target).toFixed(2),
+          monthlyTarget: monthlyTarget ? Number(monthlyTarget).toFixed(2) : null,
+        },
+        include: { package: true },
       });
 
       return ApiResponse.created(res, plan, 'Rencana tabungan berhasil dibuat');
     } catch (error) {
-      // Paket penuh (atomic claim gagal) → 409.
-      if (error?.code === 'QUOTA_FULL') {
-        return ApiResponse.error(res, 'Kuota paket sudah penuh', 409);
-      }
-      // Duplicate active plan (kondisi unik) → 409, kuota dikembalikan
-      // otomatis oleh rollback transaction.
-      if (error?.code === 'P2002') {
-        return ApiResponse.error(res, 'Anda sudah menabung di paket ini', 409);
-      }
       console.error('Create savings error:', error?.message || error);
       return ApiResponse.error(res, 'Gagal membuat rencana tabungan');
     }
@@ -93,20 +65,14 @@ const savingsController = {
         return ApiResponse.error(res, 'Masih ada setoran yang belum diverifikasi', 400);
       }
 
-      await prisma.$transaction(async (tx) => {
-        await tx.savingsPlan.update({
-          where: { id },
-          data: {
-            status: 'CANCELLED',
-            cancelledAt: new Date(),
-            cancellationReason: req.validatedData?.reason || null,
-          },
-        });
-
-        await tx.umrohPackage.update({
-          where: { id: plan.packageId },
-          data: { quotaRemaining: { increment: 1 } },
-        });
+      // Kuota tidak dikembalikan karena menabung tidak pernah memesan kuota.
+      await prisma.savingsPlan.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          cancellationReason: req.validatedData?.reason || null,
+        },
       });
 
       return ApiResponse.success(res, null, 'Rencana tabungan berhasil dibatalkan');

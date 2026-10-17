@@ -9,7 +9,13 @@ import { z } from 'zod';
 export const RELATIONS = ['self', 'suami', 'istri', 'ayah', 'ibu', 'anak', 'other'];
 
 export const createSavingsSchema = z.object({
-  packageId: z.string().min(1, 'Paket wajib dipilih').max(64),
+  // Paket opsional: hanya patokan harga, bukan ikatan rencana tabungan.
+  packageId: z.string().min(1, 'Paket tidak valid').max(64).optional(),
+  targetAmount: z.coerce
+    .number()
+    .positive('Target tabungan harus lebih dari 0')
+    .max(1_000_000_000, 'Target tabungan terlalu besar')
+    .optional(),
   jamaahName: z.string().min(3, 'Nama jamaah minimal 3 karakter').max(100).optional(),
   jamaahRelation: z.enum(RELATIONS).optional(),
   monthlyTarget: z.coerce

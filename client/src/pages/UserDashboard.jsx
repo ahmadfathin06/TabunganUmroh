@@ -209,7 +209,7 @@ export default function UserDashboard() {
                 <div className="rounded-[2rem] border-2 border-dashed border-emerald-900/12 bg-sand/30 p-10 text-center md:p-14">
                   <p className="font-serif text-2xl text-ink">Belum ada rencana tabungan</p>
                   <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-sage">
-                    Pilih paket umroh dan mulai menabung. Setoran minimal Rp100rb tanpa biaya administrasi.
+                    Buat rencana dengan target bebas — paket umroh hanya jadi patokan harga. Setoran minimal Rp25rb tanpa biaya administrasi.
                   </p>
                   <button
                     onClick={() => setShowCreate(true)}

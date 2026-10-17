@@ -104,7 +104,7 @@ export default function PlanCard({ plan, index = 0, confirmCancelId, onCancelCli
             {Number(plan.currentBalance) === 0 && !hasPendingDeposit && (
               <button
                 onClick={() => onCancelClick(plan.id)}
-                title="Batalkan rencana (kuota dikembalikan)"
+                title="Batalkan rencana tabungan"
                 className={`rounded-full px-3 py-2.5 text-xs font-bold transition ${
                   confirmCancelId === plan.id
                     ? 'bg-terra text-white hover:bg-terra/90'

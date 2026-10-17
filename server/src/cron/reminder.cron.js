@@ -38,7 +38,11 @@ export const runMonthlyReminder = async () => {
         data: {
           userId: plan.user.id,
           title: 'Reminder Setoran 🔔',
-          message: `Assalamualaikum, Anda belum melakukan setoran bulan ini untuk "${plan.package.name}". Silakan melakukan transfer segera agar target keberangkatan tetap terjaga!`,
+          message: `Assalamualaikum, Anda belum melakukan setoran bulan ini${
+            plan.package
+              ? ` untuk "${plan.package.name}"`
+              : ` untuk rencana "${plan.jamaahName}"`
+          }. Silakan melakukan transfer segera agar target keberangkatan tetap terjaga!`,
           type: 'REMINDER',
         },
       });

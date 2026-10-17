@@ -152,7 +152,7 @@ model UmrohPackage {
 model SavingsPlan {
   id                String       @id @default(cuid())
   userId            String       @map("user_id")
-  packageId         String       @map("package_id")
+  packageId         String?      @map("package_id")
   jamaahName        String       @map("jamaah_name")
   jamaahRelation    String?      @map("jamaah_relation")
   targetAmount      Decimal      @db.Decimal(15, 2) @map("target_amount")
@@ -166,7 +166,8 @@ model SavingsPlan {
   lunasCertUrl      String?      @map("lunas_cert_url")
 
   user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  package           UmrohPackage @relation(fields: [packageId], references: [id])
+  // Patokan harga saja — plan TIDAK terikat pada paket (boleh null).
+  package           UmrohPackage? @relation(fields: [packageId], references: [id])
   deposits          Deposit[]
 
   createdAt         DateTime  @default(now()) @map("created_at")

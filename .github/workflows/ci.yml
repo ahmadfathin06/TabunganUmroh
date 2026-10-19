@@ -38,6 +38,10 @@ jobs:
       # GitHub Secrets / Vercel Environment Variables.
       JWT_ACCESS_SECRET: ci_access_secret_0123456789abcdefghijklmnop
       JWT_REFRESH_SECRET: ci_refresh_secret_0123456789abcdefghijklmn
+      # CI tidak punya server/.env — tanpa ini expiresIn jadi undefined dan
+      # jwt.sign gagal → register 500 → seluruh integration test hookFailed.
+      JWT_ACCESS_EXPIRES: 15m
+      JWT_REFRESH_EXPIRES: 7d
     steps:
       - uses: actions/checkout@v4
 
@@ -98,6 +102,8 @@ jobs:
       DATABASE_URL: postgresql://tabunganku:tabunganku@127.0.0.1:5432/tabunganku_test?schema=public&connection_limit=5
       JWT_ACCESS_SECRET: ci_access_secret_0123456789abcdefghijklmnop
       JWT_REFRESH_SECRET: ci_refresh_secret_0123456789abcdefghijklmn
+      JWT_ACCESS_EXPIRES: 15m
+      JWT_REFRESH_EXPIRES: 7d
       FRONTEND_URL: http://localhost:5173
       # Kredensial admin khusus CI (bukan password produksi).
       ADMIN_EMAIL: admin-ci@tabunganku.test

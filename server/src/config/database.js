@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.ts';
+import { normalizeSslMode } from '../utils/sslMode.js';
 
 /**
  * Prisma 7: client tidak lagi dibuat dari '@prisma/client' (itu kini hanya
@@ -14,7 +15,9 @@ import { PrismaClient } from '../generated/prisma/client.ts';
  *   bila muncul error sertifikat setelah upgrade.
  */
 const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
+  // sslmode=require diterjemahkan ke verify-full (perilaku sama persis) supaya
+  // tidak memunculkan SECURITY WARNING pg-connection-string di log tiap request.
+  connectionString: normalizeSslMode(process.env.DATABASE_URL),
 });
 
 const prisma = new PrismaClient({

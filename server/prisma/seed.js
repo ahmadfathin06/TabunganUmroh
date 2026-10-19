@@ -10,11 +10,12 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 import crypto from 'crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.ts';
+import { normalizeSslMode } from '../src/utils/sslMode.js';
 import bcrypt from 'bcrypt';
 
 // Prisma 7: client dari hasil generate + driver adapter (sama seperti database.js).
 const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  adapter: new PrismaPg({ connectionString: normalizeSslMode(process.env.DATABASE_URL) }),
 });
 
 const isProduction = process.env.NODE_ENV === 'production';

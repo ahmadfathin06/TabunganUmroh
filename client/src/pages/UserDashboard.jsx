@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { Plus, Loader2 } from 'lucide-react';
 import api from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { extractApiError } from '../utils/apiError';
 
 import DepositModal from '../components/DepositModal';
 import CreatePlanModal from '../components/CreatePlanModal';
@@ -119,7 +120,7 @@ export default function UserDashboard() {
       setConfirmCancelId(null);
       refreshAll();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Gagal membatalkan rencana');
+      toast.error(extractApiError(err, 'Gagal membatalkan rencana'));
       setConfirmCancelId(null);
     }
   };

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { resetSocket } from '../services/socketService';
+import { extractApiError } from '../utils/apiError';
 
 /**
  * Baca JSON dari localStorage secara aman. Jika data corrupt atau
@@ -37,7 +38,7 @@ export const useAuthStore = create((set) => ({
       set({ isLoading: false });
       return {
         success: false,
-        message: error.response?.data?.message || 'Login gagal',
+        message: extractApiError(error, 'Login gagal'),
       };
     }
   },
@@ -58,7 +59,7 @@ export const useAuthStore = create((set) => ({
       set({ isLoading: false });
       return {
         success: false,
-        message: error.response?.data?.message || 'Registrasi gagal',
+        message: extractApiError(error, 'Registrasi gagal'),
         errors: error.response?.data?.errors || null,
       };
     }

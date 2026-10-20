@@ -73,7 +73,10 @@ export default function RegisterPage() {
 
   const fireErrors = (errs) => {
     if (Array.isArray(errs)) {
-      errs.forEach((e) => toast.error(e.message || 'Terjadi kesalahan'));
+      errs.forEach((e) => {
+        const message = e.message || 'Terjadi kesalahan';
+        toast.error(e.label ? `${e.label}: ${message}` : message);
+      });
     }
   };
 
@@ -94,9 +97,12 @@ export default function RegisterPage() {
     if (result.success) {
       toast.success('Registrasi berhasil! Selamat datang');
       navigate('/dashboard');
+    } else if (Array.isArray(result.errors) && result.errors.length > 0) {
+      // Ada detail per field → tampilkan detailnya (lebih berguna daripada
+      // ringkasan generik).
+      fireErrors(result.errors);
     } else {
       toast.error(result.message || 'Registrasi gagal');
-      fireErrors(result.errors);
     }
   };
 

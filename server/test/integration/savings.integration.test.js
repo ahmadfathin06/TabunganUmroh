@@ -2,6 +2,7 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { startTestServer, registerUser, cleanupUsers, prisma } from '../support/server.js';
+import { FIELD_LABELS } from '../../src/middlewares/validate.middleware.js';
 
 /**
  * Perilaku baru: menabung TIDAK terikat pada satu paket.
@@ -130,6 +131,62 @@ test('POST /savings dengan packageId fiktif → 404, tidak ada plan yatim', asyn
     where: { userId: user.id, packageId: 'pkg_tidak_ada_123' },
   });
   assert.equal(orphan, null);
+});
+
+/**
+ * Regression: modal "Buat Rencana" dulu mengirim isi form apa adanya tanpa
+ * validasi client, jadi nama yang terlalu pendek (atau target melebihi
+ * batas) ditolak server dengan 422. Client hanya membaca `message` generik
+ * ("Validasi gagal") sehingga user tidak tahu field mana yang salah.
+ *
+ * Sekarang: 422 harus menyebut field + alasannya dalam bahasa Indonesia.
+ */
+test('POST /savings dengan data tidak valid -> 422 yang menyebut field & alasannya', async () => {
+  const res = await ctx.request('/api/savings', {
+    method: 'POST',
+    token: user.accessToken,
+    body: { targetAmount: 35000000, jamaahName: 'Ab', jamaahRelation: 'self' },
+  });
+
+  assert.equal(res.status, 422, res.text);
+  assert.equal(res.body.success, false);
+  assert.match(res.body.message, /minimal 3 karakter/);
+
+  // Detail per field tersedia untuk ditampilkan inline di form.
+  assert.ok(Array.isArray(res.body.errors));
+  const nameIssue = res.body.errors.find((e) => e.field === 'jamaahName');
+  assert.ok(nameIssue, 'error harus menunjuk field yang salah');
+  assert.equal(nameIssue.label, FIELD_LABELS.jamaahName);
+  assert.match(nameIssue.message, /minimal 3 karakter/);
+});
+
+test('POST /savings dengan target melebihi batas -> 422 dengan pesan jelas', async () => {
+  const res = await ctx.request('/api/savings', {
+    method: 'POST',
+    token: user.accessToken,
+    body: { targetAmount: 2000000000, jamaahRelation: 'self' },
+  });
+
+  assert.equal(res.status, 422, res.text);
+  assert.match(res.body.message, /Target tabungan maksimal/);
+});
+
+test('POST /savings nama kosong -> 201 (pakai nama profil), bukan 422', async () => {
+  const res = await ctx.request('/api/savings', {
+    method: 'POST',
+    token: user.accessToken,
+    body: { targetAmount: 1000000, jamaahRelation: 'self' },
+  });
+
+  assert.equal(res.status, 201, res.text);
+  assert.ok(res.body.data.jamaahName, 'nama jamaah harus terisi (dari profil)');
+
+  // Bereskan supaya tidak menumpuk.
+  await ctx.request(`/api/savings/${res.body.data.id}/cancel`, {
+    method: 'PUT',
+    token: user.accessToken,
+    body: {},
+  });
 });
 
 test('PUT /savings/:id/cancel → berhasil tanpa paket & kuota paket tidak berubah', async () => {

@@ -11,6 +11,10 @@ import {
 import api from '../services/api';
 import { formatCurrency } from '../utils/formatCurrency';
 import { QUICK_AMOUNTS } from '../utils/constants';
+import { extractApiError } from '../utils/apiError';
+import { parseAmountInput } from '../utils/money';
+
+const MIN_DEPOSIT = 10000;
 
 export default function DepositModal({ plans, bankAccounts, presetPlanId, onClose, onSuccess }) {
   const [planId, setPlanId] = useState(presetPlanId || plans[0]?.id || '');
@@ -18,9 +22,11 @@ export default function DepositModal({ plans, bankAccounts, presetPlanId, onClos
   const [bankId, setBankId] = useState(bankAccounts[0]?.id || '');
   const [submitting, setSubmitting] = useState(false);
   const [transferInfo, setTransferInfo] = useState(null);
+  const [amountError, setAmountError] = useState('');
 
   const selectedPlan = plans.find((p) => p.id === planId);
   const selectedBank = bankAccounts.find((b) => b.id === bankId);
+  const parsedAmount = parseAmountInput(amount);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -28,17 +34,30 @@ export default function DepositModal({ plans, bankAccounts, presetPlanId, onClos
       toast.error('Lengkapi data setoran terlebih dahulu');
       return;
     }
+
+    // Validasi nominal sebelum dikirim: server membalas 422 untuk nominal
+    // < Rp 10.000, dan pesan sebelumnya hanya "Validasi gagal".
+    if (Number.isNaN(parsedAmount)) {
+      setAmountError('Nominal setoran harus berupa angka');
+      return;
+    }
+    if (parsedAmount < MIN_DEPOSIT) {
+      setAmountError('Minimal setor Rp 10.000');
+      return;
+    }
+    setAmountError('');
+
     setSubmitting(true);
     try {
       const res = await api.post('/deposits', {
         savingsPlanId: planId,
-        amount: Number(amount),
+        amount: parsedAmount,
         bankAccountId: bankId,
       });
       setTransferInfo(res.data.data.transferInfo);
       toast.success('Setoran dibuat! Silakan transfer sesuai instruksi.');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Gagal membuat setoran');
+      toast.error(extractApiError(err, 'Gagal membuat setoran'));
     } finally {
       setSubmitting(false);
     }
@@ -154,15 +173,29 @@ export default function DepositModal({ plans, bankAccounts, presetPlanId, onClos
                 </label>
                 <input
                   id="depAmount"
-                  type="number"
-                  min="10000"
-                  step="10000"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
                   placeholder="500000"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                  required
+                  onChange={(e) => {
+                    setAmount(e.target.value);
+                    if (amountError) setAmountError('');
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 transition ${
+                    amountError
+                      ? 'border-terra/60 focus:border-terra focus:ring-terra/15'
+                      : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-100'
+                  }`}
                 />
+                {amountError ? (
+                  <p className="mt-1 text-xs text-terra">{amountError}</p>
+                ) : (
+                  !Number.isNaN(parsedAmount) &&
+                  parsedAmount > 0 && (
+                    <p className="mt-1 text-xs text-slate-400">Nominal: {formatCurrency(parsedAmount)}</p>
+                  )
+                )}
                 <div className="flex flex-wrap gap-2 mt-2">
                   {QUICK_AMOUNTS.map((amt) => (
                     <button

@@ -4,6 +4,7 @@ import { Loader2, Plus, Plane, X, Pencil, Power } from 'lucide-react';
 import api from '../../services/api';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
+import { parseAmountInput } from '../../utils/money';
 
 const EMPTY_PACKAGE_FORM = {
   name: '',
@@ -115,8 +116,9 @@ export default function PackagesPanel() {
 
   const validateForm = () => {
     const errs = {};
+    const price = parseAmountInput(form.price);
     if (!form.name || form.name.trim().length < 3) errs.name = 'Nama paket minimal 3 karakter';
-    if (!form.price || Number(form.price) < 1000000) errs.price = 'Harga minimal Rp 1.000.000';
+    if (Number.isNaN(price) || price < 1000000) errs.price = 'Harga minimal Rp 1.000.000';
     if (!form.departureDate) errs.departureDate = 'Tanggal berangkat wajib diisi';
     if (!form.departureCity?.trim()) errs.departureCity = 'Kota berangkat wajib diisi';
     if (!form.durationDays || Number(form.durationDays) < 1) errs.durationDays = 'Durasi minimal 1 hari';
@@ -134,7 +136,7 @@ export default function PackagesPanel() {
     const payload = {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
-        price: Number(form.price),
+        price: parseAmountInput(form.price),
         departureDate: new Date(form.departureDate).toISOString(),
         departureCity: form.departureCity.trim(),
         durationDays: Number(form.durationDays),
@@ -236,14 +238,14 @@ export default function PackagesPanel() {
               <label className={labelCls} htmlFor="pkg-price">Harga (Rp) *</label>
               <input
                 id="pkg-price"
-                type="number"
-                min="1000000"
-                step="500000"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
                 value={form.price}
                 onChange={(e) => setField('price', e.target.value)}
                 className={inputCls('price')}
               />
-              <p className="mt-1 text-xs text-sage">{formatCurrency(Number(form.price) || 0)}</p>
+              <p className="mt-1 text-xs text-sage">{formatCurrency(parseAmountInput(form.price) || 0)}</p>
               {errors.price && <p className="mt-1 text-xs text-terra">{errors.price}</p>}
             </div>
 

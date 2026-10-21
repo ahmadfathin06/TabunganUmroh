@@ -12,6 +12,8 @@ router.use(authenticate, authorize('ADMIN', 'SUPER_ADMIN'));
 router.get('/dashboard', adminController.dashboard);
 router.get('/users', adminController.getUsers);
 router.get('/deposits/pending', adminController.getPendingDeposits);
+router.delete('/users/:id', adminController.deleteUser);
+router.delete('/plans/:id', adminController.deletePlan);
 router.post('/notifications/broadcast', validate(broadcastSchema), adminController.broadcast);
 
 export default router;

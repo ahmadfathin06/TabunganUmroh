@@ -98,7 +98,10 @@ function PackagesSection({ packages, loading }) {
           </div>
         ) : (
           <div className="mt-16 grid items-stretch gap-8 md:grid-cols-2 lg:grid-cols-3 lg:gap-6">
-            {packages.slice(0, 6).map((pkg, i) => (
+            {/* Semua paket ditampilkan — sebelumnya dipotong 6 sehingga paket
+                ke-7 dan seterusnya tidak pernah terlihat meskipun sudah
+                diunggah admin. */}
+            {packages.map((pkg, i) => (
               <PackageCard key={pkg.id} pkg={pkg} index={i} featured={i === featuredIdx} />
             ))}
           </div>

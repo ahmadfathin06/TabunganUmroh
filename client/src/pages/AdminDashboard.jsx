@@ -15,6 +15,8 @@ import {
   Eye,
   Megaphone,
   Send,
+  Trash2,
+  TriangleAlert,
 } from 'lucide-react';
 import PackagesPanel from '../components/admin/PackagesPanel';
 import DocumentsVerifyPanel from '../components/admin/DocumentsVerifyPanel';
@@ -22,6 +24,7 @@ import api from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { formatCurrency } from '../utils/formatCurrency';
 import { formatDate, timeAgo } from '../utils/formatDate';
+import { extractApiError } from '../utils/apiError';
 import { PLAN_STATUS } from '../utils/constants';
 
 const TABS = {
@@ -42,6 +45,8 @@ export default function AdminDashboard() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // Rencana ber saldo → minta konfirmasi tambahan sebelum dihapus paksa.
+  const [forcePlan, setForcePlan] = useState(null);
 
   const loadStats = useCallback(async () => {
     try {
@@ -94,6 +99,40 @@ export default function AdminDashboard() {
       refresh();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Gagal verifikasi setoran');
+    }
+  };
+
+
+  /**
+   * Hapus rencana tabungan (admin).
+   *
+   * Server menolak rencana yang masih punya saldo (400 + penanda `force`).
+   * Saat itu diminta konfirmasi tambahan: hapus paksa beserta saldo.
+   */
+  const deletePlan = async (plan, force = false) => {
+    try {
+      const res = await api.delete(`/admin/plans/${plan.id}${force ? '?force=true' : ''}`);
+      toast.success(res.data?.message || 'Rencana tabungan dihapus');
+      setForcePlan(null);
+      loadAll();
+    } catch (err) {
+      const forceIssue = err.response?.data?.errors?.find((e) => e.field === 'force');
+      if (err.response?.status === 400 && forceIssue) {
+        setForcePlan({ plan, balance: Number(forceIssue.balance || 0) });
+        return;
+      }
+      toast.error(extractApiError(err, 'Gagal menghapus rencana tabungan'));
+    }
+  };
+
+  /** Hapus jamaah beserta seluruh datanya (rencana, setoran, dokumen). */
+  const deleteUser = async (u) => {
+    try {
+      const res = await api.delete(`/admin/users/${u.id}`);
+      toast.success(res.data?.message || 'Jamaah berhasil dihapus');
+      loadAll();
+    } catch (err) {
+      toast.error(extractApiError(err, 'Gagal menghapus jamaah'));
     }
   };
 
@@ -190,7 +229,7 @@ export default function AdminDashboard() {
               {tab === TABS.VERIFY ? (
                 <VerifyPanel pending={pending} onVerify={verifyDeposit} />
               ) : tab === TABS.PLANS ? (
-                <PlansPanel plans={plans} />
+                <PlansPanel plans={plans} onDelete={deletePlan} />
               ) : tab === TABS.PACKAGES ? (
                 <PackagesPanel />
               ) : tab === TABS.DOCS ? (
@@ -198,11 +237,51 @@ export default function AdminDashboard() {
               ) : tab === TABS.BROADCAST ? (
                 <BroadcastPanel users={users} />
               ) : (
-                <UsersPanel users={users} />
+                <UsersPanel users={users} onDelete={deleteUser} />
               )}
             </motion.div>
           </AnimatePresence>
         )}
+
+      {/* Konfirmasi tambahan: rencana ber saldo dihapus paksa */}
+      {forcePlan && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+          onClick={() => setForcePlan(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <TriangleAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Rencana ini masih punya saldo</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Saldo <b>{formatCurrency(forcePlan.balance)}</b> beserta seluruh setorannya ikut terhapus
+                  dan tidak dapat dikembalikan.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => setForcePlan(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => deletePlan(forcePlan.plan, true)}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition"
+              >
+                Hapus beserta saldo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
@@ -356,8 +435,25 @@ function VerifyPanel({ pending, onVerify }) {
 }
 
 /* ============ SEMUA TABUNGAN ============ */
-function PlansPanel({ plans }) {
+function PlansPanel({ plans, onDelete }) {
   const [q, setQ] = useState('');
+  const [confirmId, setConfirmId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  // Dua klik: pertama "Hapus" -> "Yakin hapus?", klik kedua baru menghapus.
+  const handleDelete = async (plan) => {
+    if (confirmId !== plan.id) {
+      setConfirmId(plan.id);
+      return;
+    }
+    setBusyId(plan.id);
+    try {
+      await onDelete(plan);
+    } finally {
+      setBusyId(null);
+      setConfirmId(null);
+    }
+  };
   const filtered = plans.filter(
     (p) =>
       (p.user?.name || '').toLowerCase().includes(q.toLowerCase()) ||
@@ -396,6 +492,7 @@ function PlansPanel({ plans }) {
               <th className="px-5 py-3 font-semibold">Progres</th>
               <th className="px-5 py-3 font-semibold">Dibuat</th>
               <th className="px-5 py-3 font-semibold">Status</th>
+              <th className="px-5 py-3 font-semibold text-right">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -434,6 +531,26 @@ function PlansPanel({ plans }) {
                       {st.label}
                     </span>
                   </td>
+                  <td className="px-5 py-3.5 text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(p)}
+                      disabled={busyId === p.id}
+                      title="Hapus rencana tabungan ini"
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60 ${
+                        confirmId === p.id
+                          ? 'bg-rose-600 text-white hover:bg-rose-700'
+                          : 'text-rose-600 border border-rose-200 hover:bg-rose-50'
+                      }`}
+                    >
+                      {busyId === p.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      {confirmId === p.id ? 'Yakin hapus?' : 'Hapus'}
+                    </button>
+                  </td>
                 </tr>
               );
             })}
@@ -445,8 +562,24 @@ function PlansPanel({ plans }) {
 }
 
 /* ============ JAMAAH ============ */
-function UsersPanel({ users }) {
+function UsersPanel({ users, onDelete }) {
   const [q, setQ] = useState('');
+  const [confirmId, setConfirmId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  const handleDelete = async (u) => {
+    if (confirmId !== u.id) {
+      setConfirmId(u.id);
+      return;
+    }
+    setBusyId(u.id);
+    try {
+      await onDelete(u);
+    } finally {
+      setBusyId(null);
+      setConfirmId(null);
+    }
+  };
   const filtered = users.filter(
     (u) =>
       u.name.toLowerCase().includes(q.toLowerCase()) ||
@@ -483,6 +616,7 @@ function UsersPanel({ users }) {
               <th className="px-5 py-3 font-semibold">Kontak</th>
               <th className="px-5 py-3 font-semibold">Terdaftar</th>
               <th className="px-5 py-3 font-semibold">Status</th>
+              <th className="px-5 py-3 font-semibold text-right">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -511,6 +645,26 @@ function UsersPanel({ users }) {
                       <XCircle className="w-3.5 h-3.5" /> Nonaktif
                     </span>
                   )}
+                </td>
+                <td className="px-5 py-3.5 text-right">
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(u)}
+                    disabled={busyId === u.id}
+                    title="Hapus jamaah beserta seluruh datanya"
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60 ${
+                      confirmId === u.id
+                        ? 'bg-rose-600 text-white hover:bg-rose-700'
+                        : 'text-rose-600 border border-rose-200 hover:bg-rose-50'
+                    }`}
+                  >
+                    {busyId === u.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    {confirmId === u.id ? 'Yakin hapus?' : 'Hapus'}
+                  </button>
                 </td>
               </tr>
             ))}

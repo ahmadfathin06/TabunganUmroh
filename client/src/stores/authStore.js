@@ -17,10 +17,66 @@ const safeGetJSON = (key) => {
   }
 };
 
+/* --------------------------------------------------------------------------
+ * Sesi tersimpan (persistent login)
+ *
+ * Token disimpan di localStorage, jadi saat web dibuka lagi user TIDAK perlu
+ * login ulang selama refresh token masih berlaku. Access token hanya 15 menit,
+ * jadi kalau sudah kedaluwarsa kita minta yang baru lewat refresh token.
+ * ------------------------------------------------------------------------ */
+const hasStoredSession = () =>
+  Boolean(localStorage.getItem('accessToken') || localStorage.getItem('refreshToken'));
+
+const clearStoredSession = () => {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+};
+
+// StrictMode (React 18 dev) memanggil effect dua kali — pastikan bootstrap
+// sesi hanya berjalan sekali dan pemanggil kedua menunggu promise yang sama.
+let initPromise = null;
+
 export const useAuthStore = create((set) => ({
   user: safeGetJSON('user'),
-  isAuthenticated: !!localStorage.getItem('accessToken'),
+  // Percaya refresh token juga, bukan hanya access token: access token cepat
+  // kedaluwarsa, tapi sesi tetap dianggap aktif sampai refresh-nya gagal.
+  isAuthenticated: hasStoredSession(),
+  isInitialized: false,
   isLoading: false,
+
+  /**
+   * Restore sesi saat aplikasi pertama kali dibuka.
+   * - Tanpa token → guest.
+   * - Access token hilang/kedaluwarsa → refresh dulu, lalu ambil profil terbaru.
+   * - Refresh gagal → bersihkan sesi (tanpa memaksa redirect dari halaman publik).
+   */
+  initialize: () => {
+    if (initPromise) return initPromise;
+
+    initPromise = (async () => {
+      if (!hasStoredSession()) {
+        set({ user: null, isAuthenticated: false, isInitialized: true });
+        return;
+      }
+
+      try {
+        const res = await api.get('/auth/me');
+        const user = res.data.data;
+        localStorage.setItem('user', JSON.stringify(user));
+        set({ user, isAuthenticated: true, isInitialized: true });
+      } catch {
+        // Interceptor sudah mencoba refresh token. Kalau tetap gagal, sesi
+        // memang tidak valid lagi → jadikan guest.
+        if (!hasStoredSession()) set({ user: null, isAuthenticated: false });
+        set({ isInitialized: true });
+      }
+    })().finally(() => {
+      initPromise = null;
+    });
+
+    return initPromise;
+  },
 
   login: async (identifier, password) => {
     set({ isLoading: true });

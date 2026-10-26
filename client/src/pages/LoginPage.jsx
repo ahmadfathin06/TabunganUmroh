@@ -29,7 +29,6 @@ export default function LoginPage() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(() => !!localStorage.getItem('accessToken'));
 
   const {
     register,
@@ -121,16 +120,10 @@ export default function LoginPage() {
           {errors.password && <p className="mt-1 text-xs text-terra">{errors.password.message}</p>}
         </div>
 
-        {/* Remember */}
-        <label className="flex cursor-pointer items-center gap-2.5 text-sm text-sage">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => setRemember(e.target.checked)}
-            className="h-4 w-4 rounded accent-gold-600"
-          />
-          Ingat saya di perangkat ini
-        </label>
+        <p className="flex items-center gap-2.5 text-sm text-sage">
+          <Lock className="h-4 w-4 shrink-0 text-sage" />
+          Sesi Anda tersimpan otomatis di perangkat ini.
+        </p>
 
         <button
           type="submit"

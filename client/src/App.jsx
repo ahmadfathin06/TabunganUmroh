@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { motion } from 'motion/react';
@@ -6,6 +6,7 @@ import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
 import PageLoader from './components/PageLoader';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { useAuthStore } from './stores/authStore';
 
 /* ---------- Code-split routes (landing stays in the entry chunk) ---------- */
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -40,6 +41,13 @@ function BottomTabBar() {
 }
 
 export default function App() {
+  const initialize = useAuthStore((s) => s.initialize);
+
+  // Pulihkan sesi tersimpan sekali saat aplikasi dibuka (auto-login).
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
   return (
     <BrowserRouter
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}

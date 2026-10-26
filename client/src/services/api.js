@@ -52,12 +52,33 @@ const runRefresh = async () => {
   return accessToken;
 };
 
+/**
+ * Minta access token baru (single-flight). Dipakai juga saat bootstrap sesi
+ * di authStore ketika access token sudah kedaluwarsa.
+ */
+export const refreshAccessToken = () => {
+  if (!refreshPromise) {
+    refreshPromise = runRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+};
+
+// Halaman yang memang butuh login — hanya di sini redirect paksa masuk akal.
+// Dari landing/login, sesi yang habis cukup membuat UI kembali ke mode guest.
+const PROTECTED_PATHS = ['/dashboard', '/profile', '/admin'];
+
 const forceLogout = () => {
   resetSocket();
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
-  window.location.href = '/login';
+
+  const { pathname } = window.location;
+  if (PROTECTED_PATHS.some((path) => pathname.startsWith(path))) {
+    window.location.href = '/login';
+  }
 };
 
 // Interceptor Response: Handle token expired (401) dan refresh token otomatis
@@ -78,15 +99,8 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Hanya pembuat promise pertama yang memanggil API; sisanya menunggu.
-    if (!refreshPromise) {
-      refreshPromise = runRefresh().finally(() => {
-        refreshPromise = null;
-      });
-    }
-
     try {
-      const accessToken = await refreshPromise;
+      const accessToken = await refreshAccessToken();
       originalRequest.headers.Authorization = `Bearer ${accessToken}`;
       return api(originalRequest);
     } catch (refreshError) {

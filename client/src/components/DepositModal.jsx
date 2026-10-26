@@ -83,7 +83,17 @@ export default function DepositModal({ plans, bankAccounts, presetPlanId, onClos
             <div className="space-y-4">
               <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-sm">
                 <p className="font-semibold text-emerald-800 mb-1">Transfer tepat sejumlah:</p>
-                <p className="text-2xl font-extrabold text-emerald-800">{formatCurrency(transferInfo.totalTransfer)}</p>
+                <p className="flex items-center gap-2 text-2xl font-extrabold text-emerald-800">
+                  {formatCurrency(transferInfo.totalTransfer)}
+                  <button
+                    onClick={() => copy(transferInfo.totalTransfer)}
+                    className="text-emerald-600/60 hover:text-emerald-700"
+                    aria-label="Salin jumlah transfer"
+                    type="button"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </p>
                 <p className="text-xs text-emerald-600 mt-1">
                   = {formatCurrency(transferInfo.amount)} + kode unik {transferInfo.uniqueCode}
                 </p>

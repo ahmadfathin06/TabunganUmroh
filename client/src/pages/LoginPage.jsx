@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -9,12 +9,24 @@ import { useAuthStore } from '../stores/authStore';
 import AuthShell, { authInputClass, authLabelClass } from '../components/auth/AuthShell';
 
 const loginSchema = z.object({
-  email: z.string().email('Format email tidak valid'),
+  identifier: z
+    .string()
+    .trim()
+    .min(1, 'Email atau No. HP wajib diisi')
+    .refine(
+      (value) =>
+        value.includes('@')
+          ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+          : /^\+?[0-9][0-9\s-]{7,19}$/.test(value),
+      'Masukkan email atau No. HP yang valid'
+    ),
   password: z.string().min(1, 'Password wajib diisi'),
 });
 
 export default function LoginPage() {
   const { login } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(() => !!localStorage.getItem('accessToken'));
@@ -26,7 +38,7 @@ export default function LoginPage() {
   } = useForm({ resolver: zodResolver(loginSchema) });
 
   const onSubmit = async (data) => {
-    const result = await login(data.email, data.password);
+    const result = await login(data.identifier, data.password);
     if (result.success) {
       toast.success('Login berhasil!');
       const role = result.user.role;
@@ -35,6 +47,11 @@ export default function LoginPage() {
       toast.error(result.message || 'Login gagal');
     }
   };
+
+  // Sudah login → langsung ke halaman sesuai role.
+  if (isAuthenticated) {
+    return <Navigate to={user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' ? '/admin' : '/dashboard'} replace />;
+  }
 
   return (
     <AuthShell
@@ -50,21 +67,22 @@ export default function LoginPage() {
       }
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
-        {/* Email */}
+        {/* Email atau No. HP */}
         <div>
-          <label className={authLabelClass} htmlFor="email">Email</label>
+          <label className={authLabelClass} htmlFor="identifier">Email atau No. HP</label>
           <div className="relative">
             <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sage" />
             <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="nama@email.com"
-              {...register('email')}
-              className={`${authInputClass(errors.email)} pl-11`}
+              id="identifier"
+              type="text"
+              inputMode="email"
+              autoComplete="username"
+              placeholder="nama@email.com atau 08xxxxxxxxxx"
+              {...register('identifier')}
+              className={`${authInputClass(errors.identifier)} pl-11`}
             />
           </div>
-          {errors.email && <p className="mt-1 text-xs text-terra">{errors.email.message}</p>}
+          {errors.identifier && <p className="mt-1 text-xs text-terra">{errors.identifier.message}</p>}
         </div>
 
         {/* Password */}

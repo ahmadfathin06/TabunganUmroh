@@ -5,6 +5,7 @@ import { ArrowRight, BadgeCheck } from 'lucide-react';
 import AnimatedNumber from './AnimatedNumber';
 import { GeometricPattern, MosqueSilhouette } from './Ornament';
 import { EASE_OUT_EXPO, SPRING_SOFT } from '../../utils/animations';
+import { useAuthStore } from '../../stores/authStore';
 
 /* ---------------- Golden drifting particles (dzikir beads) ---------------- */
 function GoldenParticles({ count = 22 }) {
@@ -191,6 +192,8 @@ const STATS = [
 ];
 
 export default function HeroSection() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-midnight via-forest to-night">
       {/* grain + geometric ghost pattern */}
@@ -250,10 +253,10 @@ export default function HeroSection() {
             >
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Link
-                  to="/register"
+                  to={isAuthenticated ? '/dashboard' : '/register'}
                   className="group inline-flex items-center gap-2.5 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-7 py-4 text-sm font-bold text-night shadow-glow-gold transition-shadow hover:shadow-[0_14px_50px_-8px_rgba(212,162,76,0.7)]"
                 >
-                  Mulai Menabung Sekarang
+                  {isAuthenticated ? 'Buka Dashboard' : 'Mulai Menabung Sekarang'}
                   <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                 </Link>
               </motion.div>

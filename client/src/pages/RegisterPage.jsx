@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -53,6 +53,7 @@ const registerSchema = z
 
 export default function RegisterPage() {
   const { register: registerUser } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -107,6 +108,9 @@ export default function RegisterPage() {
   };
 
   const err = (k) => errors[k] && <p className="mt-1 text-xs text-terra">{errors[k].message}</p>;
+
+  // Sudah login → tidak perlu daftar lagi.
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   return (
     <AuthShell

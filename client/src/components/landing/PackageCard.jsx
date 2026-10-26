@@ -5,6 +5,7 @@ import { PACKAGE_STATUS } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
 import { cn } from '../../utils/cn';
+import { useAuthStore } from '../../stores/authStore';
 
 /**
  * Premium package card. `featured` style is driven by the API package marked
@@ -13,6 +14,7 @@ import { cn } from '../../utils/cn';
 export default function PackageCard({ pkg, featured = false, index = 0 }) {
   const price = Number(pkg.price || 0);
   const status = PACKAGE_STATUS[pkg.status] || PACKAGE_STATUS.OPEN;
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isOpen = pkg.status === 'OPEN';
   const monthly = Math.round(price / 12);
 
@@ -125,7 +127,7 @@ export default function PackageCard({ pkg, featured = false, index = 0 }) {
         {/* CTA */}
         <motion.div whileHover={isOpen ? { scale: 1.02 } : undefined} whileTap={isOpen ? { scale: 0.98 } : undefined} className="mt-7">
           <Link
-            to={isOpen ? '/register' : '#'}
+            to={isOpen ? (isAuthenticated ? '/dashboard' : '/register') : '#'}
             aria-disabled={!isOpen}
             className={cn(
               'group/btn flex w-full items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-bold transition-all duration-300',

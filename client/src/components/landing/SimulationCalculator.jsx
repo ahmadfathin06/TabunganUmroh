@@ -6,6 +6,7 @@ import AnimatedNumber from './AnimatedNumber';
 import SectionHeading from './SectionHeading';
 import { formatCurrency, formatCurrencyShort } from '../../utils/formatCurrency';
 import { EASE_OUT_EXPO } from '../../utils/animations';
+import { useAuthStore } from '../../stores/authStore';
 
 const GOLD_RANGE = { accentColor: '#d4a24c' };
 
@@ -39,6 +40,7 @@ export default function SimulationCalculator() {
   const [price, setPrice] = useState(35000000);
   const [monthly, setMonthly] = useState(1000000);
   const resultRef = useRef(null);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const months = monthly > 0 ? Math.max(1, Math.ceil(price / monthly)) : 0;
   const years = Math.floor(months / 12);
@@ -189,10 +191,10 @@ export default function SimulationCalculator() {
             </p>
 
             <Link
-              to="/register"
+              to={isAuthenticated ? '/dashboard' : '/register'}
               className="group mt-8 inline-flex items-center justify-center gap-2.5 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-7 py-3.5 text-sm font-bold text-night shadow-glow-gold transition-shadow hover:shadow-[0_14px_50px_-8px_rgba(212,162,76,0.7)]"
             >
-              Mulai Rencana Ini
+              {isAuthenticated ? 'Buka Dashboard' : 'Mulai Rencana Ini'}
               <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </Link>
           </div>

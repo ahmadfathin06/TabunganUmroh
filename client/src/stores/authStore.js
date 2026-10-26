@@ -22,10 +22,10 @@ export const useAuthStore = create((set) => ({
   isAuthenticated: !!localStorage.getItem('accessToken'),
   isLoading: false,
 
-  login: async (email, password) => {
+  login: async (identifier, password) => {
     set({ isLoading: true });
     try {
-      const res = await api.post('/auth/login', { email, password });
+      const res = await api.post('/auth/login', { identifier, password });
       const { user, tokens } = res.data.data;
 
       localStorage.setItem('accessToken', tokens.accessToken);

@@ -13,6 +13,7 @@ import CTABanner from '../components/landing/CTABanner';
 import SectionHeading from '../components/landing/SectionHeading';
 import Reveal from '../components/landing/Reveal';
 import { OrnamentDivider } from '../components/landing/Ornament';
+import { useAuthStore } from '../stores/authStore';
 
 /* ---------------- Thin gold scroll progress bar ---------------- */
 function ScrollProgress() {
@@ -115,6 +116,7 @@ function PackagesSection({ packages, loading }) {
 export default function LandingPage() {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   // Smooth-scroll to #hash once the page has rendered (e.g. arriving from /login)
   useEffect(() => {
@@ -161,10 +163,10 @@ export default function LandingPage() {
             </div>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="shrink-0">
               <Link
-                to="/register"
+                to={isAuthenticated ? '/dashboard' : '/register'}
                 className="group inline-flex items-center gap-2.5 rounded-full bg-midnight px-7 py-4 text-sm font-bold text-white transition-colors hover:bg-forest"
               >
-                Buka Tabungan
+                {isAuthenticated ? 'Buka Dashboard' : 'Buka Tabungan'}
                 <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
             </motion.div>
@@ -194,10 +196,10 @@ export default function LandingPage() {
             <p className="truncate text-[10px] text-white/55">Gratis biaya administrasi</p>
           </div>
           <Link
-            to="/register"
+            to={isAuthenticated ? '/dashboard' : '/register'}
             className="shrink-0 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-5 py-2.5 text-xs font-bold text-night"
           >
-            Mulai Menabung
+            {isAuthenticated ? 'Buka Dashboard' : 'Mulai Menabung'}
           </Link>
         </div>
       </motion.div>

@@ -220,10 +220,10 @@ async function main() {
   /* ---------------- 0. NEGATIVE: LOGIN ---------------- */
   await ok('fail-login: wrong password rejected', async () => {
     await _page.goto(`${BASE}/login`, { waitUntil: 'networkidle2' });
-    await typeInto('#email', ADMIN.email);
+    await typeInto('#identifier', ADMIN.email);
     await typeInto('#password', 'WrongPass123');
     await submitFormOfInput('password');
-    await waitForText('Email atau password salah', 15000);
+    await waitForText('Email/No. HP atau password salah', 15000);
     const pathname = await _page.evaluate(() => window.location.pathname);
     if (pathname !== '/login') throw new Error(`expected to stay on /login, got ${pathname}`);
     await _page.screenshot({ path: path.join(SHOTS, '00-login-rejected.png') });
@@ -369,7 +369,7 @@ async function main() {
   /* ---------------- 5. ADMIN VERIFY ---------------- */
   await ok('admin: logout user, login admin', async () => {
     await logout();
-    await typeInto('#email', ADMIN.email);
+    await typeInto('#identifier', ADMIN.email);
     await typeInto('#password', ADMIN.password);
     await submitFormOfInput('password');
     await _page.waitForFunction(() => window.location.pathname === '/admin', { timeout: 20000 });
@@ -392,7 +392,7 @@ async function main() {
   /* ---------------- 6. USER SEES RESULT ---------------- */
   await ok('user: logout admin, login user', async () => {
     await logout();
-    await typeInto('#email', USER.email);
+    await typeInto('#identifier', USER.email);
     await typeInto('#password', USER_PASSWORD);
     await submitFormOfInput('password');
     await _page.waitForFunction(() => window.location.pathname === '/dashboard', { timeout: 20000 });

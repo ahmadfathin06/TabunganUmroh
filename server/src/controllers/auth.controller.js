@@ -10,6 +10,31 @@ import {
 import { notify } from '../services/notification.service.js';
 import { hashToken, safeCompare } from '../utils/tokenHash.js';
 
+/**
+ * Login menerima email atau nomor HP/WhatsApp. Nomor bisa tersimpan dalam
+ * format berbeda (08xxx, 628xxx, +62 8xxx), jadi cari semua variasinya.
+ */
+const phoneVariants = (raw) => {
+  const digits = String(raw).replace(/\D/g, '');
+  if (!digits) return [];
+  const variants = new Set([digits]);
+  if (digits.startsWith('62')) variants.add(`0${digits.slice(2)}`);
+  if (digits.startsWith('0')) variants.add(`62${digits.slice(1)}`);
+  return [...variants];
+};
+
+const findUserByIdentifier = async (identifier) => {
+  if (identifier.includes('@')) {
+    return prisma.user.findFirst({
+      where: { email: { equals: identifier, mode: 'insensitive' } },
+    });
+  }
+
+  const variants = phoneVariants(identifier);
+  if (variants.length === 0) return null;
+  return prisma.user.findFirst({ where: { phone: { in: variants } } });
+};
+
 const authController = {
   // ============ REGISTER ============
   register: async (req, res) => {
@@ -128,14 +153,15 @@ const authController = {
   // ============ LOGIN ============
   login: async (req, res) => {
     try {
-      const { email, password } = req.validatedData;
+      const { identifier, email: emailField, password } = req.validatedData;
+      const loginId = String(identifier ?? emailField ?? '').trim();
 
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) return ApiResponse.error(res, 'Email atau password salah', 401);
+      const user = loginId ? await findUserByIdentifier(loginId) : null;
+      if (!user) return ApiResponse.error(res, 'Email/No. HP atau password salah', 401);
       if (!user.isActive) return ApiResponse.error(res, 'Akun dinonaktifkan', 403);
 
       const isValid = await bcrypt.compare(password, user.password);
-      if (!isValid) return ApiResponse.error(res, 'Email atau password salah', 401);
+      if (!isValid) return ApiResponse.error(res, 'Email/No. HP atau password salah', 401);
 
       const accessToken = generateAccessToken(user.id, user.role);
       const refreshToken = generateRefreshToken(user.id);

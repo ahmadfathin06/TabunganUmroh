@@ -18,10 +18,16 @@ export const registerSchema = z.object({
   path: ['confirmPassword'],
 });
 
+// Login bisa memakai email ATAU nomor WhatsApp/HP. `email` tetap diterima
+// supaya klien lama yang belum mengirim `identifier` tidak langsung rusak.
 export const loginSchema = z.object({
-  email: z.string().email('Format email tidak valid'),
+  identifier: z.string().trim().min(1, 'Email atau No. HP wajib diisi').max(100).optional(),
+  email: z.string().trim().min(1).max(100).optional(),
   password: z.string().min(1, 'Password wajib diisi'),
-}).strict();
+}).strict().refine((data) => Boolean(data.identifier || data.email), {
+  message: 'Email atau No. HP wajib diisi',
+  path: ['identifier'],
+});
 
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token wajib diisi'),

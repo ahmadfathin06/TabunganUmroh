@@ -4,8 +4,11 @@ import { ArrowRight, LogIn } from 'lucide-react';
 import Reveal from './Reveal';
 import { GeometricPattern, OrnamentDivider, StarMark } from './Ornament';
 import { EASE_OUT_EXPO } from '../../utils/animations';
+import { useAuthStore } from '../../stores/authStore';
 
 export default function CTABanner() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-midnight to-night py-28 md:py-40">
       <div className="noise pointer-events-none absolute inset-0 opacity-[0.05] mix-blend-overlay" />
@@ -38,22 +41,24 @@ export default function CTABanner() {
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Link
-                to="/register"
+                to={isAuthenticated ? '/dashboard' : '/register'}
                 className="group inline-flex items-center gap-2.5 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-8 py-4 text-sm font-bold text-night shadow-glow-gold transition-shadow hover:shadow-[0_14px_50px_-8px_rgba(212,162,76,0.7)]"
               >
-                Daftar Sekarang — Gratis
+                {isAuthenticated ? 'Buka Dashboard' : 'Daftar Sekarang — Gratis'}
                 <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Link
-                to="/login"
-                className="inline-flex items-center gap-2 rounded-full border border-white/25 px-8 py-4 text-sm font-semibold text-white transition-colors hover:border-gold-400/60"
-              >
-                <LogIn className="h-4 w-4" />
-                Sudah punya akun? Masuk
-              </Link>
-            </motion.div>
+            {!isAuthenticated && (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Link
+                  to="/login"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/25 px-8 py-4 text-sm font-semibold text-white transition-colors hover:border-gold-400/60"
+                >
+                  <LogIn className="h-4 w-4" />
+                  Sudah punya akun? Masuk
+                </Link>
+              </motion.div>
+            )}
           </div>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-white/45">
